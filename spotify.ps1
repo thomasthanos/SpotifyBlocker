@@ -453,75 +453,59 @@ $FullUninstallBtn.Add_Click({
 
 
 $BlockBtn.Add_Click({
-    Update-Status "Starting to block Spotify updates..."
+    # Έλεγχος αν είμαστε admin
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+    ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
-    if (-not (Test-Path "$env:LOCALAPPDATA\Spotify")) {
-        Update-Status "Spotify not found. Please install Spotify first."
+    if (-not $isAdmin) {
+        $scriptPath = $PSCommandPath
+        $argList = "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`" -BlockOnly"
+        Start-Process powershell.exe -Verb RunAs -ArgumentList $argList
         return
     }
 
-    $job = Start-Job -ScriptBlock {
-        try {
-            Get-Process -Name Spotify -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 1
+    # Αν είναι admin, συνεχίζουμε το block
+    Update-Status "Blocking Spotify..."
 
-            $username = $env:UserName
-            $updateFolder = "$env:LOCALAPPDATA\Spotify\Update"
-            $appdataSpotify = "$env:APPDATA\Spotify"
-            $spotifyExe = "$env:LOCALAPPDATA\Spotify\Spotify.exe"
-            $spotifySig = "$env:LOCALAPPDATA\Spotify\Spotify.exe.sig"
+    $fullUser = "$env:COMPUTERNAME\$env:USERNAME"
+    $updateFolder = "$env:LOCALAPPDATA\Spotify\Update"
+    $appdataSpotify = "$env:APPDATA\Spotify"
+    $spotifyExe = "$env:LOCALAPPDATA\Spotify\Spotify.exe"
+    $spotifySig = "$env:LOCALAPPDATA\Spotify\Spotify.exe.sig"
 
-            # Ensure ownership and basic access
-            foreach ($path in @($updateFolder, $appdataSpotify, $spotifyExe, $spotifySig)) {
-                if (Test-Path $path) {
-                    & takeown /F $path /R /D Y | Out-Null
-                    & icacls $path /grant "${username}:(OI)(CI)F" /T | Out-Null
-                    & icacls $path /reset /T | Out-Null
-                }
-            }
+    if (-not (Test-Path $updateFolder)) {
+        New-Item $updateFolder -ItemType Directory -Force | Out-Null
+    }
 
-            # Create Update folder if missing
-            if (-not (Test-Path $updateFolder)) {
-                New-Item $updateFolder -ItemType Directory -Force | Out-Null
-            }
-
-            # === APPLY PERMISSIONS BASED ON TABLE ===
-
-            # 1. Deny Delete + Read on Update folder for USER
-            & icacls $updateFolder /deny "${username}:(DE,RC)" | Out-Null
-
-            # 2. Deny Write on %APPDATA%\Spotify for USER
-            if (Test-Path $appdataSpotify) {
-                & icacls $appdataSpotify /deny "${username}:(W)" | Out-Null
-            }
-
-            # 3. Spotify.exe
-            if (Test-Path $spotifyExe) {
-                & icacls $spotifyExe /deny "${username}:(W)" | Out-Null      # User: Deny Write
-                & icacls $spotifyExe /deny "SYSTEM:(F)" | Out-Null          # SYSTEM: Deny Full
-            }
-
-            # 4. Spotify.exe.sig
-            if (Test-Path $spotifySig) {
-                & icacls $spotifySig /deny "${username}:(F)" | Out-Null     # User: Deny All
-                & icacls $spotifySig /deny "SYSTEM:(F)" | Out-Null          # SYSTEM: Deny All
-            }
-
-            return "Spotify blocking rules applied successfully."
-        } catch {
-            return "Failed to block Spotify updates: $_"
+    foreach ($path in @($updateFolder, $appdataSpotify, $spotifyExe, $spotifySig)) {
+        if (Test-Path $path) {
+            takeown /F $path /R /D Y | Out-Null
+            icacls $path /grant "${fullUser}:(OI)(CI)F" /T | Out-Null
+            icacls $path /reset /T | Out-Null
         }
     }
 
-    while ($job.State -eq "Running") {
-        Start-Sleep -Milliseconds 100
-        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([action]{}, "Background")
+    if (Test-Path $updateFolder) {
+        icacls $updateFolder /deny "${fullUser}:(DE,RC)" | Out-Null
     }
 
-    $result = Receive-Job -Job $job
-    Update-Status $result
-    Remove-Job -Job $job
+    if (Test-Path $appdataSpotify) {
+        icacls $appdataSpotify /deny "${fullUser}:(W)" | Out-Null
+    }
+
+    if (Test-Path $spotifyExe) {
+        icacls $spotifyExe /deny "${fullUser}:(W)" | Out-Null
+        icacls $spotifyExe /deny "SYSTEM:(F)" | Out-Null
+    }
+
+    if (Test-Path $spotifySig) {
+        icacls $spotifySig /deny "${fullUser}:(F)" | Out-Null
+        icacls $spotifySig /deny "SYSTEM:(F)" | Out-Null
+    }
+
+    Update-Status "Spotify blocking rules applied."
 })
+
 
 $UnblockBtn.Add_Click({
     Update-Status "Starting to unblock Spotify..."
