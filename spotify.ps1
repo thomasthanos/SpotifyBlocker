@@ -453,21 +453,61 @@ $FullUninstallBtn.Add_Click({
 
 
 $BlockBtn.Add_Click({
-    # Έλεγχος αν είμαστε admin
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
     ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
     if (-not $isAdmin) {
-        $scriptPath = $PSCommandPath
-        $argList = "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`" -BlockOnly"
-        Start-Process powershell.exe -Verb RunAs -ArgumentList $argList
+        $scriptBlock = @'
+        Write-Host "Blocking Spotify as admin..."
+        $user = "$env:COMPUTERNAME\$env:USERNAME"
+        $updateFolder = "$env:LOCALAPPDATA\Spotify\Update"
+        $appdataSpotify = "$env:APPDATA\Spotify"
+        $spotifyExe = "$env:LOCALAPPDATA\Spotify\Spotify.exe"
+        $spotifySig = "$env:LOCALAPPDATA\Spotify\Spotify.exe.sig"
+
+        if (-not (Test-Path $updateFolder)) {
+            New-Item $updateFolder -ItemType Directory -Force | Out-Null
+        }
+
+        foreach ($path in @($updateFolder, $appdataSpotify, $spotifyExe, $spotifySig)) {
+            if (Test-Path $path) {
+                takeown /F $path /R /D Y | Out-Null
+                icacls $path /grant "${user}:(OI)(CI)F" /T | Out-Null
+                icacls $path /reset /T | Out-Null
+            }
+        }
+
+        if (Test-Path $updateFolder) {
+            icacls $updateFolder /deny "${user}:(DE,RC)" | Out-Null
+        }
+
+        if (Test-Path $appdataSpotify) {
+            icacls $appdataSpotify /deny "${user}:(W)" | Out-Null
+        }
+
+        if (Test-Path $spotifyExe) {
+            icacls $spotifyExe /deny "${user}:(W)" | Out-Null
+            icacls $spotifyExe /deny "SYSTEM:(F)" | Out-Null
+        }
+
+        if (Test-Path $spotifySig) {
+            icacls $spotifySig /deny "${user}:(F)" | Out-Null
+            icacls $spotifySig /deny "SYSTEM:(F)" | Out-Null
+        }
+
+        Write-Host "Blocking complete. Press any key to close..."
+        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+'@
+
+        $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($scriptBlock))
+        Start-Process powershell.exe -Verb RunAs -ArgumentList "-NoProfile -EncodedCommand $encoded"
         return
     }
 
-    # Αν είναι admin, συνεχίζουμε το block
+    # Αν ήδη admin, κάνε block inline
     Update-Status "Blocking Spotify..."
 
-    $fullUser = "$env:COMPUTERNAME\$env:USERNAME"
+    $user = "$env:COMPUTERNAME\$env:USERNAME"
     $updateFolder = "$env:LOCALAPPDATA\Spotify\Update"
     $appdataSpotify = "$env:APPDATA\Spotify"
     $spotifyExe = "$env:LOCALAPPDATA\Spotify\Spotify.exe"
@@ -480,26 +520,26 @@ $BlockBtn.Add_Click({
     foreach ($path in @($updateFolder, $appdataSpotify, $spotifyExe, $spotifySig)) {
         if (Test-Path $path) {
             takeown /F $path /R /D Y | Out-Null
-            icacls $path /grant "${fullUser}:(OI)(CI)F" /T | Out-Null
+            icacls $path /grant "${user}:(OI)(CI)F" /T | Out-Null
             icacls $path /reset /T | Out-Null
         }
     }
 
     if (Test-Path $updateFolder) {
-        icacls $updateFolder /deny "${fullUser}:(DE,RC)" | Out-Null
+        icacls $updateFolder /deny "${user}:(DE,RC)" | Out-Null
     }
 
     if (Test-Path $appdataSpotify) {
-        icacls $appdataSpotify /deny "${fullUser}:(W)" | Out-Null
+        icacls $appdataSpotify /deny "${user}:(W)" | Out-Null
     }
 
     if (Test-Path $spotifyExe) {
-        icacls $spotifyExe /deny "${fullUser}:(W)" | Out-Null
+        icacls $spotifyExe /deny "${user}:(W)" | Out-Null
         icacls $spotifyExe /deny "SYSTEM:(F)" | Out-Null
     }
 
     if (Test-Path $spotifySig) {
-        icacls $spotifySig /deny "${fullUser}:(F)" | Out-Null
+        icacls $spotifySig /deny "${user}:(F)" | Out-Null
         icacls $spotifySig /deny "SYSTEM:(F)" | Out-Null
     }
 
