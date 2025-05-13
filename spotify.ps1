@@ -155,23 +155,6 @@ $XAML = @"
                         </Button.Template>
                     </Button>
                     <!-- Στο StackPanel του κύριου περιεχομένου, μετά το UnblockBtn -->
-                    <Button Name="BlockInstallerBtn" Content="Block Advanced Installer" Margin="0,12" Width="160" Height="32" FontSize="12" Cursor="Hand"
-                            Foreground="White" Background="#2d2d2d" HorizontalAlignment="Center">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border Name="border" Background="{TemplateBinding Background}" 
-                                        BorderBrush="#404040" BorderThickness="1,1,1,3" CornerRadius="8">
-                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
-                                <ControlTemplate.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="border" Property="BorderBrush" Value="#8b5cf6"/>
-                                        <Setter TargetName="border" Property="BorderThickness" Value="1,1,1,3"/>
-                                    </Trigger>
-                                </ControlTemplate.Triggers>
-                            </ControlTemplate>
-                        </Button.Template>
-                    </Button>
                     <!-- Status Label (larger) -->
                     <TextBlock Name="StatusLabel" Text="" Foreground="#d1d5db" FontSize="16" Margin="0,5,0,0" HorizontalAlignment="Center"/>
                 </StackPanel>
@@ -195,7 +178,6 @@ $UninstallBtn = $window.FindName("UninstallBtn")
 $FullUninstallBtn = $window.FindName("FullUninstallBtn")
 $BlockBtn = $window.FindName("BlockBtn")
 $UnblockBtn = $window.FindName("UnblockBtn")
-$BlockInstallerBtn = $window.FindName("BlockInstallerBtn")
 $ExitBtn = $window.FindName("ExitBtn")
 $MinimizeBtn = $window.FindName("MinimizeBtn")
 $StatusLabel = $window.FindName("StatusLabel")
@@ -540,59 +522,16 @@ icacls "%localappdata%\Spotify\Update" /remove:d "%username%"
 
     Remove-Job -Job $job
 })
-# Πριν τα window controls, προσθήκη του νέου handler
-$BlockInstallerBtn.Add_Click({
-
-    Update-Status "Preparing SYSTEM-level execution..."
-
-    # Paths
-    $psexecPath = "C:\Tools\PsExec.exe"  # 🔁 Βεβαιώσου ότι αυτό είναι το σωστό path!
-    $scriptPath = "$env:TEMP\blockCaphyon.ps1"
-
-    # Save the full SYSTEM-level block script
-    $scriptText = @'
-try {
-    $folder = "C:\Program Files (x86)\Caphyon"
-    $exe1 = "$folder\Advanced Installer 22.5\updater.exe"
-
-    takeown /F "$folder" /R /D Y | Out-Null
-    icacls "$folder" /setowner "Administrators" /T | Out-Null
-    icacls "$folder" /grant:r "Administrators:(OI)(CI)F" /T | Out-Null
-    icacls "$folder" /inheritance:r /T | Out-Null
-    icacls "$folder" /deny "Users:(OI)(CI)(F)" /T | Out-Null
-    icacls "$folder" /deny "Everyone:(OI)(CI)(F)" /T | Out-Null
-
-    Get-Process -Name "updater" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-
-    $svc = Get-Service | Where-Object { $_.Name -like "*Updater*" }
-    if ($svc) {
-        Stop-Service $svc.Name -Force -ErrorAction SilentlyContinue
-        sc.exe delete $svc.Name | Out-Null
-    }
-
-    $SID = (Get-WmiObject Win32_UserAccount | Where-Object { $_.Name -eq "$env:USERNAME" }).SID
-    $regPath = "Registry::HKEY_USERS\$SID\Software\Caphyon\Advanced Updater"
-    if (Test-Path $regPath) {
-        Remove-Item -Path $regPath -Recurse -Force
-    }
-
-    if (Test-Path $exe1) {
-        New-NetFirewallRule -DisplayName "Block Updater" -Direction Outbound -Action Block -Program $exe1 -Profile Any -ErrorAction SilentlyContinue
-    }
-
-    Write-Host "`n✅ [SYSTEM] Caphyon blocked."
-} catch {
-    Write-Host "`n❌ Error: $_"
-}
-'@
-
-    # Write the script to file
-    $scriptText | Out-File -FilePath $scriptPath -Encoding UTF8 -Force
-
-    # Start PsExec as SYSTEM to run the script
-    Start-Process -FilePath "$psexecPath" -ArgumentList "-i -s powershell.exe -ExecutionPolicy Bypass -File `"$scriptPath`"" -Verb RunAs
-})
 
 # Window controls
 $ExitBtn.Add_Click({ $window.Close() })
 $MinimizeBtn.Add_Click({ $window.WindowState = "Minimized" })
+
+
+#| Στόχος                          | Χρήστης           | SYSTEM   | Admins   |
+#| ------------------------------- | ----------------- | -------- | -------- |
+#| `%LOCALAPPDATA%\Spotify\Update` | Deny Delete, Read | —        | —        |
+#| `%APPDATA%\Spotify`             | Deny Write only   | —        | —        |
+#| `Spotify.exe`                   | Deny Write only   | Deny All | —        |
+#| `Spotify.exe.sig`               | Deny All          | Deny All | —        |
+#| ------------------------------- | ----------------- | -------- | -------- |
