@@ -58,8 +58,6 @@ $XAML = @"
 
                 <!-- Main Content -->
                 <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,10,0,10">
-                    <!-- Larger title -->
-
                     <!-- Install Spicetify Button (larger) -->
                     <Button Name="InstallBtn" Content="Install Spicetify" Margin="0,12" Width="280" Height="52" FontSize="16" Cursor="Hand"
                             Foreground="White" Background="#2d2d2d">
@@ -450,12 +448,70 @@ $FullUninstallBtn.Add_Click({
     Remove-Job -Job $job
 })
 
-
-
 $BlockBtn.Add_Click({
+    Update-Status "Starting to block Spotify updates..."
 
+    if (-not (Test-Path "$env:APPDATA\Spotify") -and -not (Test-Path "$env:LOCALAPPDATA\Spotify")) {
+        Update-Status "Spotify not found. Nothing to block."
+        return
+    }
+
+    $job = Start-Job -ScriptBlock {
+        try {
+            $username = $env:UserName
+            $appdataSpotify = "$env:APPDATA\Spotify"
+            $spotifyExe = "$env:APPDATA\Spotify\Spotify.exe"
+            $spotifySig = "$env:APPDATA\Spotify\Spotify.exe.sig"
+            $localAppDataSpotify = "$env:LOCALAPPDATA\Spotify"
+            $updateFolder = "$env:LOCALAPPDATA\Spotify\Update"
+
+            # Stop Spotify processes
+            Get-Process -Name Spotify -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 1
+
+            # Deny write to %APPDATA%\Spotify
+            if (Test-Path $appdataSpotify) {
+                & icacls $appdataSpotify /deny "${username}:(W)" /T 2>&1 | Out-Null
+            }
+
+            # Deny write to Spotify.exe
+            if (Test-Path $spotifyExe) {
+                & icacls $spotifyExe /deny "${username}:(W)" 2>&1 | Out-Null
+            }
+
+            # Full deny except admin for Spotify.exe.sig
+            if (Test-Path $spotifySig) {
+                & icacls $spotifySig /inheritance:r 2>&1 | Out-Null
+                & icacls $spotifySig /grant "Administrators:(F)" 2>&1 | Out-Null
+                & icacls $spotifySig /deny "${username}:(F)" 2>&1 | Out-Null
+                & icacls $spotifySig /deny "Everyone:(F)" 2>&1 | Out-Null
+            }
+
+            # Handle Update folder in %LOCALAPPDATA%\Spotify
+            if (Test-Path $localAppDataSpotify) {
+                if (Test-Path $updateFolder) {
+                    Remove-Item -Path $updateFolder -Recurse -Force -ErrorAction SilentlyContinue
+                }
+                New-Item -Path $updateFolder -ItemType Directory -Force | Out-Null
+                & icacls $updateFolder /deny "${username}:(R,W)" /T 2>&1 | Out-Null
+                & icacls $updateFolder /deny "Everyone:(R,W)" /T 2>&1 | Out-Null
+            }
+
+            return "Spotify updates blocked successfully."
+        } catch {
+            return "Failed to block Spotify updates: $_"
+        }
+    }
+
+    while ($job.State -eq "Running") {
+        Start-Sleep -Milliseconds 100
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([action]{}, "Background")
+    }
+
+    $result = Receive-Job -Job $job
+    Update-Status $result
+    Remove-Job -Job $job
 })
-
 
 $UnblockBtn.Add_Click({
     Update-Status "Starting to unblock Spotify..."
@@ -470,8 +526,8 @@ $UnblockBtn.Add_Click({
             $username = $env:UserName
             $updateFolder = "$env:LOCALAPPDATA\Spotify\Update"
             $appdataSpotify = "$env:APPDATA\Spotify"
-            $spotifyExe = "$env:LOCALAPPDATA\Spotify\Spotify.exe"
-            $spotifySig = "$env:LOCALAPPDATA\Spotify\Spotify.exe.sig"
+            $spotifyExe = "$env:APPDATA\Spotify\Spotify.exe"
+            $spotifySig = "$env:APPDATA\Spotify\Spotify.exe.sig"
 
             # Αφαίρεση DENY entries
             foreach ($path in @($updateFolder, $appdataSpotify, $spotifyExe, $spotifySig)) {
@@ -496,9 +552,6 @@ $UnblockBtn.Add_Click({
     Update-Status $result
     Remove-Job -Job $job
 })
-
-
-
 
 # Πριν τα window controls, προσθήκη του νέου handler
 $BlockInstallerBtn.Add_Click({
