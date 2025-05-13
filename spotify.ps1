@@ -596,12 +596,3 @@ try {
 # Window controls
 $ExitBtn.Add_Click({ $window.Close() })
 $MinimizeBtn.Add_Click({ $window.WindowState = "Minimized" })
-
-
-#| Στόχος                          | Χρήστης           | SYSTEM   | Admins   |
-#| ------------------------------- | ----------------- | -------- | -------- |
-#| `%LOCALAPPDATA%\Spotify\Update` | Deny Delete, Read | —        | —        |
-#| `%APPDATA%\Spotify`             | Deny Write only   | —        | —        |
-#| `Spotify.exe`                   | Deny Write only   | Deny All | —        |
-#| `Spotify.exe.sig`               | Deny All          | Deny All | —        |
-#| ------------------------------- | ----------------- | -------- | -------- |
