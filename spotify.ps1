@@ -533,38 +533,68 @@ $UnblockBtn.Add_Click({
         return
     }
 
-    $job = Start-Job -ScriptBlock {
-        try {
-            Get-Process -Name Spotify -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 1
+    # Ζήτηση επιβεβαίωσης για admin perms
+    $result = [System.Windows.Forms.MessageBox]::Show("This action requires admin privileges. Do you want to proceed?", "Admin Permission Required", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Warning)
 
-            $unblockScript = @"
-icacls "%localappdata%\Spotify\Update" /remove:d "%username%"
-"@
-            $unblockFile = "$env:TEMP\unblock-spotify.cmd"
-            $unblockScript | Out-File -FilePath $unblockFile -Encoding ASCII
-            
-            $process = Start-Process cmd.exe -ArgumentList "/c `"$unblockFile`"" -Verb RunAs -PassThru -Wait
-            
-            if ($process.ExitCode -eq 0) {
+    if ($result -eq [System.Windows.Forms.MessageBoxResult]::Yes) {
+        $job = Start-Job -ScriptBlock {
+            try {
+                # Αναγκαστική διακοπή της διαδικασίας Spotify
+                Get-Process -Name Spotify -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Seconds 1
+
+                $updateFolder = "$env:LOCALAPPDATA\Spotify\Update"
+                $appDataFolder = "$env:APPDATA\Spotify"
+                $exePath = "$env:LOCALAPPDATA\Spotify\Spotify.exe"
+                $sigPath = "$env:LOCALAPPDATA\Spotify\Spotify.exe.sig"
+                $username = $env:UserName
+
+                # Επαναφορά permissions για Update Folder
+                if (Test-Path $updateFolder) {
+                    & takeown /F $updateFolder /R /D Y 2>&1 | Out-Null
+                    & icacls $updateFolder /reset /T 2>&1 | Out-Null
+                    & icacls $updateFolder /grant "${username}:(OI)(CI)F" /T 2>&1 | Out-Null
+                }
+
+                # Επαναφορά permissions για AppData Folder
+                if (Test-Path $appDataFolder) {
+                    & takeown /F $appDataFolder /R /D Y 2>&1 | Out-Null
+                    & icacls $appDataFolder /reset /T 2>&1 | Out-Null
+                    & icacls $appDataFolder /grant "${username}:(OI)(CI)F" /T 2>&1 | Out-Null
+                }
+
+                # Επαναφορά permissions για Spotify.exe
+                if (Test-Path $exePath) {
+                    & takeown /F $exePath /D Y 2>&1 | Out-Null
+                    & icacls $exePath /reset 2>&1 | Out-Null
+                    & icacls $exePath /grant "${username}:(OI)(CI)F" 2>&1 | Out-Null
+                }
+
+                # Επαναφορά permissions για Spotify.exe.sig
+                if (Test-Path $sigPath) {
+                    & takeown /F $sigPath /D Y 2>&1 | Out-Null
+                    & icacls $sigPath /reset 2>&1 | Out-Null
+                    & icacls $sigPath /grant "${username}:(OI)(CI)F" 2>&1 | Out-Null
+                }
+
                 return "Spotify updates unblocked successfully."
-            } else {
-                return "Failed to unblock Spotify updates."
+            } catch {
+                return "Failed to unblock Spotify updates: $_"
             }
-        } catch {
-            return "Failed to unblock Spotify updates: $_"
+        } -RunAsAdministrator
+
+        while ($job.State -eq "Running") {
+            Start-Sleep -Milliseconds 100
+            [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([action]{}, "Background")
         }
+
+        $result = Receive-Job -Job $job
+        Update-Status $result
+
+        Remove-Job -Job $job
+    } else {
+        Update-Status "Action cancelled by user."
     }
-
-    while ($job.State -eq "Running") {
-        Start-Sleep -Milliseconds 100
-        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([action]{}, "Background")
-    }
-
-    $result = Receive-Job -Job $job
-    Update-Status $result
-
-    Remove-Job -Job $job
 })
 # Πριν τα window controls, προσθήκη του νέου handler
 $BlockInstallerBtn.Add_Click({
