@@ -6,7 +6,7 @@ $XAML = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Spicetify Tool"
-        Height="580" Width="550"
+        Height="520" Width="500"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
@@ -14,22 +14,15 @@ $XAML = @"
         FontFamily="Segoe UI">
 
     <Grid Background="Transparent">
-        <!-- Outer glow effect -->
         <Border Background="#22000000" CornerRadius="22" Margin="4"/>
-        
-        <!-- Main window with 3D effect -->
         <Border Background="#1e1e1e" CornerRadius="20" Padding="0" SnapsToDevicePixels="True" ClipToBounds="True">
-            <Border.Effect>
-                <DropShadowEffect ShadowDepth="0" Color="Black" Opacity="0" BlurRadius="20"/>
-            </Border.Effect>
-            
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="40"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <!-- Titlebar (unchanged size) -->
+                <!-- Titlebar -->
                 <Border CornerRadius="20,20,0,0" Background="#2d2d2d" Grid.Row="0">
                     <DockPanel LastChildFill="True" Margin="0">
                         <TextBlock Text="  Spicetify Tool" VerticalAlignment="Center" Foreground="White" FontSize="14"/>
@@ -57,123 +50,126 @@ $XAML = @"
                 </Border>
 
                 <!-- Main Content -->
-                <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,10,0,10">
-                    <!-- Larger title -->
+                <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <TextBlock Text="Spicetify Custom Tool" Foreground="White" FontSize="20" Margin="0,0,0,20" HorizontalAlignment="Center"/>
 
-                    <!-- Install Spicetify Button (larger) -->
-                    <Button Name="InstallBtn" Content="Install Spicetify" Margin="0,12" Width="280" Height="52" FontSize="16" Cursor="Hand"
-                            Foreground="White" Background="#2d2d2d">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border Name="border" Background="{TemplateBinding Background}" 
-                                        BorderBrush="#404040" BorderThickness="1,1,1,3" CornerRadius="8">
-                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
-                                <ControlTemplate.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="border" Property="BorderBrush" Value="#3b82f6"/>
-                                        <Setter TargetName="border" Property="BorderThickness" Value="1,1,1,3"/>
-                                    </Trigger>
-                                </ControlTemplate.Triggers>
-                            </ControlTemplate>
-                        </Button.Template>
-                    </Button>
-
-                    <!-- Uninstall Spicetify Button (larger) -->
-                    <Button Name="UninstallBtn" Content="Uninstall Spicetify" Margin="0,12" Width="280" Height="52" FontSize="16" Cursor="Hand"
-                            Foreground="White" Background="#2d2d2d">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border Name="border" Background="{TemplateBinding Background}" 
-                                        BorderBrush="#404040" BorderThickness="1,1,1,3" CornerRadius="8">
-                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
-                                <ControlTemplate.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="border" Property="BorderBrush" Value="#f97316"/>
-                                        <Setter TargetName="border" Property="BorderThickness" Value="1,1,1,3"/>
-                                    </Trigger>
-                                </ControlTemplate.Triggers>
-                            </ControlTemplate>
-                        </Button.Template>
+                    <!-- Uninstall Spotify Button -->
+                    <Button Name="FullUninstallBtn" Content="Uninstall Spotify Completely" Margin="0,8" Width="220" Height="42" FontSize="14" Cursor="Hand"
+                            Background="#8b5cf6" Foreground="White" BorderThickness="0">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Name="border" Background="{TemplateBinding Background}" CornerRadius="12">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="border" Property="Background" Value="#7c3aed"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </Button.Style>
                     </Button>
 
-                    <!-- Full Uninstall Button (larger) -->
-                    <Button Name="FullUninstallBtn" Content="Full Uninstall" Margin="0,12" Width="280" Height="52" FontSize="16" Cursor="Hand"
-                            Foreground="White" Background="#2d2d2d">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border Name="border" Background="{TemplateBinding Background}" 
-                                        BorderBrush="#404040" BorderThickness="1,1,1,3" CornerRadius="8">
-                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
-                                <ControlTemplate.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="border" Property="BorderBrush" Value="#ef4444"/>
-                                        <Setter TargetName="border" Property="BorderThickness" Value="1,1,1,3"/>
-                                    </Trigger>
-                                </ControlTemplate.Triggers>
-                            </ControlTemplate>
-                        </Button.Template>
+                    <!-- Install Spicetify Button -->
+                    <Button Name="InstallBtn" Content="Install Spicetify" Margin="0,8" Width="220" Height="42" FontSize="14" Cursor="Hand"
+                            Background="#3b82f6" Foreground="White" BorderThickness="0">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Name="border" Background="{TemplateBinding Background}" CornerRadius="12">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="border" Property="Background" Value="#2563eb"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </Button.Style>
                     </Button>
 
-                    <!-- Block Updates Button (larger) -->
-                    <Button Name="BlockBtn" Content="Block Updates" Margin="0,12" Width="280" Height="52" FontSize="16" Cursor="Hand"
-                            Foreground="White" Background="#2d2d2d">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border Name="border" Background="{TemplateBinding Background}" 
-                                        BorderBrush="#404040" BorderThickness="1,1,1,3" CornerRadius="8">
-                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
-                                <ControlTemplate.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="border" Property="BorderBrush" Value="#22c55e"/>
-                                        <Setter TargetName="border" Property="BorderThickness" Value="1,1,1,3"/>
-                                    </Trigger>
-                                </ControlTemplate.Triggers>
-                            </ControlTemplate>
-                        </Button.Template>
+                    <!-- Uninstall Spicetify Button -->
+                    <Button Name="UninstallBtn" Content="Uninstall Spicetify" Margin="0,8" Width="220" Height="42" FontSize="14" Cursor="Hand"
+                            Background="#f97316" Foreground="White" BorderThickness="0">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Name="border" Background="{TemplateBinding Background}" CornerRadius="12">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="border" Property="Background" Value="#ea580c"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </Button.Style>
                     </Button>
 
-                    <!-- Unblock Updates Button (larger) -->
-                    <Button Name="UnblockBtn" Content="Unblock Updates" Margin="0,12" Width="280" Height="52" FontSize="16" Cursor="Hand"
-                            Foreground="White" Background="#2d2d2d">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border Name="border" Background="{TemplateBinding Background}" 
-                                        BorderBrush="#404040" BorderThickness="1,1,1,3" CornerRadius="8">
-                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
-                                <ControlTemplate.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="border" Property="BorderBrush" Value="#10b981"/>
-                                        <Setter TargetName="border" Property="BorderThickness" Value="1,1,1,3"/>
-                                    </Trigger>
-                                </ControlTemplate.Triggers>
-                            </ControlTemplate>
-                        </Button.Template>
+                    <!-- Block Updates Button -->
+                    <Button Name="BlockBtn" Content="Block Spotify Updates" Margin="0,8" Width="220" Height="42" FontSize="14" Cursor="Hand"
+                            Background="#ef4444" Foreground="White" BorderThickness="0">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Name="border" Background="{TemplateBinding Background}" CornerRadius="12">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="border" Property="Background" Value="#dc2626"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </Button.Style>
                     </Button>
-                    <!-- Στο StackPanel του κύριου περιεχομένου, μετά το UnblockBtn -->
-                    <Button Name="BlockInstallerBtn" Content="Block Advanced Installer" Margin="0,12" Width="160" Height="32" FontSize="12" Cursor="Hand"
-                            Foreground="White" Background="#2d2d2d" HorizontalAlignment="Center">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border Name="border" Background="{TemplateBinding Background}" 
-                                        BorderBrush="#404040" BorderThickness="1,1,1,3" CornerRadius="8">
-                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
-                                <ControlTemplate.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="border" Property="BorderBrush" Value="#8b5cf6"/>
-                                        <Setter TargetName="border" Property="BorderThickness" Value="1,1,1,3"/>
-                                    </Trigger>
-                                </ControlTemplate.Triggers>
-                            </ControlTemplate>
-                        </Button.Template>
+
+                    <!-- Unblock Updates Button -->
+                    <Button Name="UnblockBtn" Content="Unblock Spotify Updates" Margin="0,8" Width="220" Height="42" FontSize="14" Cursor="Hand"
+                            Background="#22c55e" Foreground="White" BorderThickness="0">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Name="border" Background="{TemplateBinding Background}" CornerRadius="12">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="border" Property="Background" Value="#16a34a"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </Button.Style>
                     </Button>
-                    <!-- Status Label (larger) -->
-                    <TextBlock Name="StatusLabel" Text="" Foreground="#d1d5db" FontSize="16" Margin="0,5,0,0" HorizontalAlignment="Center"/>
+
+                    <!-- Status Label -->
+                    <TextBlock Name="StatusLabel" Text="" Foreground="#d1d5db" FontSize="14" Margin="0,20,0,0" HorizontalAlignment="Center"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -195,7 +191,6 @@ $UninstallBtn = $window.FindName("UninstallBtn")
 $FullUninstallBtn = $window.FindName("FullUninstallBtn")
 $BlockBtn = $window.FindName("BlockBtn")
 $UnblockBtn = $window.FindName("UnblockBtn")
-$BlockInstallerBtn = $window.FindName("BlockInstallerBtn")
 $ExitBtn = $window.FindName("ExitBtn")
 $MinimizeBtn = $window.FindName("MinimizeBtn")
 $StatusLabel = $window.FindName("StatusLabel")
@@ -540,68 +535,10 @@ icacls "%localappdata%\Spotify\Update" /remove:d "%username%"
 
     Remove-Job -Job $job
 })
-# Πριν τα window controls, προσθήκη του νέου handler
-$BlockInstallerBtn.Add_Click({
-
-    Update-Status "Preparing SYSTEM-level execution..."
-
-    # Paths
-    $psexecPath = "C:\Tools\PsExec.exe"  # 🔁 Βεβαιώσου ότι αυτό είναι το σωστό path!
-    $scriptPath = "$env:TEMP\blockCaphyon.ps1"
-
-    # Save the full SYSTEM-level block script
-    $scriptText = @'
-try {
-    $folder = "C:\Program Files (x86)\Caphyon"
-    $exe1 = "$folder\Advanced Installer 22.5\updater.exe"
-
-    takeown /F "$folder" /R /D Y | Out-Null
-    icacls "$folder" /setowner "Administrators" /T | Out-Null
-    icacls "$folder" /grant:r "Administrators:(OI)(CI)F" /T | Out-Null
-    icacls "$folder" /inheritance:r /T | Out-Null
-    icacls "$folder" /deny "Users:(OI)(CI)(F)" /T | Out-Null
-    icacls "$folder" /deny "Everyone:(OI)(CI)(F)" /T | Out-Null
-
-    Get-Process -Name "updater" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-
-    $svc = Get-Service | Where-Object { $_.Name -like "*Updater*" }
-    if ($svc) {
-        Stop-Service $svc.Name -Force -ErrorAction SilentlyContinue
-        sc.exe delete $svc.Name | Out-Null
-    }
-
-    $SID = (Get-WmiObject Win32_UserAccount | Where-Object { $_.Name -eq "$env:USERNAME" }).SID
-    $regPath = "Registry::HKEY_USERS\$SID\Software\Caphyon\Advanced Updater"
-    if (Test-Path $regPath) {
-        Remove-Item -Path $regPath -Recurse -Force
-    }
-
-    if (Test-Path $exe1) {
-        New-NetFirewallRule -DisplayName "Block Updater" -Direction Outbound -Action Block -Program $exe1 -Profile Any -ErrorAction SilentlyContinue
-    }
-
-    Write-Host "`n✅ [SYSTEM] Caphyon blocked."
-} catch {
-    Write-Host "`n❌ Error: $_"
-}
-'@
-
-    # Write the script to file
-    $scriptText | Out-File -FilePath $scriptPath -Encoding UTF8 -Force
-
-    # Start PsExec as SYSTEM to run the script
-    Start-Process -FilePath "$psexecPath" -ArgumentList "-i -s powershell.exe -ExecutionPolicy Bypass -File `"$scriptPath`"" -Verb RunAs
-})
 
 # Window controls
 $ExitBtn.Add_Click({ $window.Close() })
 $MinimizeBtn.Add_Click({ $window.WindowState = "Minimized" })
 
-
-#| Στόχος                          | Χρήστης           | SYSTEM   | Admins   |
-#| ------------------------------- | ----------------- | -------- | -------- |
-#| `%LOCALAPPDATA%\Spotify\Update` | Deny Delete, Read | —        | —        |
-#| `%APPDATA%\Spotify`             | Deny Write only   | —        | —        |
-#| `Spotify.exe`                   | Deny Write only   | Deny All | —        |
-#| `Spotify.exe.sig`               | Deny All          | Deny All | —        |
-#| ------------------------------- | ----------------- | -------- | -------- |
+# Show window
+$window.ShowDialog() | Out-Null
