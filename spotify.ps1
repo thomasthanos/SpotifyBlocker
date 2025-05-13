@@ -456,35 +456,38 @@ $FullUninstallBtn.Add_Click({
 
 
 
-$InstallBtn.Add_Click({
-    Update-Status "Installing Spotify with block rules..."
+$BlockBtn.Add_Click({
+    Update-Status "Starting to block Spotify updates..."
 
     if (-not (Test-Path "$env:LOCALAPPDATA\Spotify")) {
-        Update-Status "Spotify not found. Please install it first."
+        Update-Status "Spotify not found. Please install Spotify first."
         return
     }
 
     $job = Start-Job -ScriptBlock {
         try {
+            Get-Process -Name Spotify -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 1
+
             $username = $env:UserName
             $updateFolder = "$env:LOCALAPPDATA\Spotify\Update"
             $appdataSpotify = "$env:APPDATA\Spotify"
             $spotifyExe = "$env:LOCALAPPDATA\Spotify\Spotify.exe"
             $spotifySig = "$env:LOCALAPPDATA\Spotify\Spotify.exe.sig"
 
-            # Ensure ownership first
+            # Reset permissions (clean slate)
             foreach ($path in @($updateFolder, $appdataSpotify, $spotifyExe, $spotifySig)) {
                 if (Test-Path $path) {
-                    & takeown /F $path /R /D Y | Out-Null
-                    & icacls $path /grant "${username}:(OI)(CI)F" /T | Out-Null
+                    & icacls $path /reset /T /C | Out-Null
                 }
             }
 
-            # Εφαρμογή σωστών περιορισμών
+            # Εξασφαλίζουμε ότι ο φάκελος Update υπάρχει
             if (-not (Test-Path $updateFolder)) {
                 New-Item $updateFolder -ItemType Directory -Force | Out-Null
             }
 
+            # Εφαρμογή permissions βάσει πίνακα
             & icacls $updateFolder /deny "${username}:(DE,RC)" | Out-Null
             if (Test-Path $appdataSpotify) {
                 & icacls $appdataSpotify /deny "${username}:(W)" | Out-Null
@@ -500,9 +503,9 @@ $InstallBtn.Add_Click({
                 & icacls $spotifySig /deny "SYSTEM:(F)" | Out-Null
             }
 
-            return "Spotify rules applied successfully."
+            return "Spotify updates blocked successfully."
         } catch {
-            return "Error during install/ACL application: $_"
+            return "Failed to block Spotify updates: $_"
         }
     }
 
@@ -515,7 +518,6 @@ $InstallBtn.Add_Click({
     Update-Status $result
     Remove-Job -Job $job
 })
-
 $UnblockBtn.Add_Click({
     Update-Status "Starting to unblock Spotify..."
 
