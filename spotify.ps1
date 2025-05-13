@@ -456,72 +456,73 @@ $FullUninstallBtn.Add_Click({
 $BlockBtn.Add_Click({
     Update-Status "Starting to block Spotify updates..."
 
-    if (-not (Test-Path "$env:LOCALAPPDATA\Spotify")) {
-        Update-Status "Spotify not found. Please install Spotify first."
-        return
-    }
+    # Ζήτηση επιβεβαίωσης για admin perms
+    $result = [System.Windows.Forms.MessageBox]::Show("This action requires admin privileges. Do you want to proceed?", "Admin Permission Required", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Warning)
 
-    $job = Start-Job -ScriptBlock {
-        try {
-            Get-Process -Name Spotify -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 1
+    if ($result -eq [System.Windows.Forms.MessageBoxResult]::Yes) {
+        $job = Start-Job -ScriptBlock {
+            try {
+                # Αναγκαστική διακοπή της διαδικασίας Spotify
+                Get-Process -Name Spotify -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Seconds 1
 
-            $localUpdateFolder = "$env:LOCALAPPDATA\Spotify\Update"
-            $appdataFolder = "$env:APPDATA\Spotify"
-            $username = $env:UserName
+                $updateFolder = "$env:LOCALAPPDATA\Spotify\Update"
+                $appDataFolder = "$env:APPDATA\Spotify"
+                $exePath = "$env:LOCALAPPDATA\Spotify\Spotify.exe"
+                $sigPath = "$env:LOCALAPPDATA\Spotify\Spotify.exe.sig"
+                $username = $env:UserName
 
-            # BLOCK LOCALAPPDATA\Spotify\Update
-            if (Test-Path $localUpdateFolder) {
-                & takeown /F $localUpdateFolder /R /D Y 2>&1 | Out-Null
-                & icacls $localUpdateFolder /grant "${username}:(OI)(CI)F" /T 2>&1 | Out-Null
-                & icacls $localUpdateFolder /reset /T 2>&1 | Out-Null
-                Remove-Item $localUpdateFolder -Recurse -Force -ErrorAction SilentlyContinue
+                if (-not (Test-Path "$env:LOCALAPPDATA\Spotify")) {
+                    return "Spotify not found. Please install Spotify first."
+                }
+
+                # Επεξεργασία Update Folder
+                if (Test-Path $updateFolder) {
+                    & takeown /F $updateFolder /R /D Y 2>&1 | Out-Null
+                    & icacls $updateFolder /grant "${username}:(OI)(CI)F" /T 2>&1 | Out-Null
+                    & icacls $updateFolder /reset /T 2>&1 | Out-Null
+                    Remove-Item $updateFolder -Recurse -Force -ErrorAction SilentlyContinue
+                }
+                New-Item $updateFolder -ItemType Directory -Force | Out-Null
+                & icacls $updateFolder /deny "${username}:(D,RD)" 2>&1 | Out-Null
+
+                # Επεξεργασία AppData Folder
+                if (Test-Path $appDataFolder) {
+                    & takeown /F $appDataFolder /R /D Y 2>&1 | Out-Null
+                    & icacls $appDataFolder /deny "${username}:(W)" 2>&1 | Out-Null
+                }
+
+                # Επεξεργασία Spotify.exe
+                if (Test-Path $exePath) {
+                    & takeown /F $exePath /D Y 2>&1 | Out-Null
+                    & icacls $exePath /deny "${username}:(W)" 2>&1 | Out-Null
+                }
+
+                # Επεξεργασία Spotify.exe.sig
+                if (Test-Path $sigPath) {
+                    & takeown /F $sigPath /D Y 2>&1 | Out-Null
+                    & icacls $sigPath /deny "${username}:(F)" 2>&1 | Out-Null
+                }
+
+                return "Spotify updates blocked successfully."
+            } catch {
+                return "Failed to block Spotify updates: $_"
             }
+        } -RunAsAdministrator
 
-            New-Item $localUpdateFolder -ItemType Directory -Force | Out-Null
-            & icacls $localUpdateFolder /deny "${username}:(D)" 2>&1 | Out-Null
-            & icacls $localUpdateFolder /deny "${username}:(R)" 2>&1 | Out-Null
-
-            # BLOCK APPDATA\Spotify folder (deny write for user)
-            if (Test-Path $appdataFolder) {
-                & takeown /F $appdataFolder /R /D Y 2>&1 | Out-Null
-                & icacls $appdataFolder /grant "${username}:(OI)(CI)F" /T 2>&1 | Out-Null
-                & icacls $appdataFolder /deny "${username}:(W)" /T 2>&1 | Out-Null
-            }
-
-            # Spotify.exe - deny write for user, deny all for system
-            $spotifyExe = Join-Path $appdataFolder "Spotify.exe"
-            if (Test-Path $spotifyExe) {
-                & icacls $spotifyExe /deny "${username}:(W)" 2>&1 | Out-Null
-                & icacls $spotifyExe /deny "SYSTEM:(F)" 2>&1 | Out-Null
-            }
-
-            # Spotify.exe.sig - deny all
-            $spotifySig = Join-Path $appdataFolder "Spotify.exe.sig"
-            if (Test-Path $spotifySig) {
-                & icacls $spotifySig /deny "${username}:(F)" 2>&1 | Out-Null
-                & icacls $spotifySig /deny "SYSTEM:(F)" 2>&1 | Out-Null
-                & icacls $spotifySig /deny "Administrators:(F)" 2>&1 | Out-Null
-            }
-
-            return "Spotify updates blocked successfully."
-        } catch {
-            return "Failed to block Spotify updates: $_"
+        while ($job.State -eq "Running") {
+            Start-Sleep -Milliseconds 100
+            [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([action]{}, "Background")
         }
+
+        $result = Receive-Job -Job $job
+        Update-Status $result
+
+        Remove-Job -Job $job
+    } else {
+        Update-Status "Action cancelled by user."
     }
-
-    while ($job.State -eq "Running") {
-        Start-Sleep -Milliseconds 100
-        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([action]{}, "Background")
-    }
-
-    $result = Receive-Job -Job $job
-    Update-Status $result
-
-    Remove-Job -Job $job
 })
-
-
 
 $UnblockBtn.Add_Click({
     Update-Status "Starting to unblock Spotify updates..."
@@ -537,45 +538,14 @@ $UnblockBtn.Add_Click({
             Get-Process -Name Spotify -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 1
 
-            $username = $env:UserName
-            $updateFolder = "$env:LOCALAPPDATA\Spotify\Update"
-            $appdataFolder = "$env:APPDATA\Spotify"
-            $spotifyExe = Join-Path $appdataFolder "Spotify.exe"
-            $spotifySig = Join-Path $appdataFolder "Spotify.exe.sig"
-
             $unblockScript = @"
-:: --- UNBLOCK LOCALAPPDATA\Spotify\Update ---
-if exist "$updateFolder" (
-    icacls "$updateFolder" /remove:d "$username"
-    icacls "$updateFolder" /reset /T
-)
-
-:: --- UNBLOCK APPDATA\Spotify folder write deny ---
-if exist "$appdataFolder" (
-    icacls "$appdataFolder" /remove:d "$username"
-    icacls "$appdataFolder" /reset /T
-)
-
-:: --- UNBLOCK Spotify.exe ---
-if exist "$spotifyExe" (
-    icacls "$spotifyExe" /remove:d "$username"
-    icacls "$spotifyExe" /remove:d "SYSTEM"
-    icacls "$spotifyExe" /reset
-)
-
-:: --- UNBLOCK Spotify.exe.sig ---
-if exist "$spotifySig" (
-    icacls "$spotifySig" /remove:d "$username"
-    icacls "$spotifySig" /remove:d "SYSTEM"
-    icacls "$spotifySig" /reset
-)
+icacls "%localappdata%\Spotify\Update" /remove:d "%username%"
 "@
-
             $unblockFile = "$env:TEMP\unblock-spotify.cmd"
-            $unblockScript | Out-File -FilePath $unblockFile -Encoding ASCII -Force
-
+            $unblockScript | Out-File -FilePath $unblockFile -Encoding ASCII
+            
             $process = Start-Process cmd.exe -ArgumentList "/c `"$unblockFile`"" -Verb RunAs -PassThru -Wait
-
+            
             if ($process.ExitCode -eq 0) {
                 return "Spotify updates unblocked successfully."
             } else {
@@ -596,9 +566,6 @@ if exist "$spotifySig" (
 
     Remove-Job -Job $job
 })
-
-
-
 # Πριν τα window controls, προσθήκη του νέου handler
 $BlockInstallerBtn.Add_Click({
     Update-Status "Requesting elevated permissions..."
@@ -656,3 +623,19 @@ $MinimizeBtn.Add_Click({ $window.WindowState = "Minimized" })
 
 # Show window
 $window.ShowDialog() | Out-Null
+
+
+
+
+
+
+
+
+
+
+#| Στόχος                          | Χρήστης           | SYSTEM   | Admins   |
+#| ------------------------------- | ----------------- | -------- | -------- |
+#| `%LOCALAPPDATA%\Spotify\Update` | Deny Delete, Read | —        | —        |
+#| `%APPDATA%\Spotify`             | Deny Write        | —        | —        |
+#| `Spotify.exe`                   | Deny Write        | Deny All | —        |
+#| `Spotify.exe.sig`               | Deny All          | Deny All | —        |
