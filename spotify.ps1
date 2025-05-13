@@ -489,14 +489,16 @@ $BlockBtn.Add_Click({
                 & icacls $appdataFolder /deny "${username}:(W)" /T 2>&1 | Out-Null
             }
 
-            # DENY access to specific files inside %APPDATA%\Spotify
-            $filesToDeny = @("Spotify.exe", "Spotify.exe.sig")
-            foreach ($file in $filesToDeny) {
-                $filePath = Join-Path $appdataFolder $file
-                if (Test-Path $filePath) {
-                    & icacls $filePath /deny "SYSTEM:(F)" 2>&1 | Out-Null
-                    & icacls $filePath /deny "${username}:(F)" 2>&1 | Out-Null
-                }
+            # DENY Write only for user on Spotify.exe
+            $spotifyExe = Join-Path $appdataFolder "Spotify.exe"
+            if (Test-Path $spotifyExe) {
+                & icacls $spotifyExe /deny "${username}:(W)" 2>&1 | Out-Null
+            }
+
+            # Optionally deny write on Spotify.exe.sig too (optional)
+            $spotifySig = Join-Path $appdataFolder "Spotify.exe.sig"
+            if (Test-Path $spotifySig) {
+                & icacls $spotifySig /deny "${username}:(W)" 2>&1 | Out-Null
             }
 
             return "Spotify updates blocked successfully."
@@ -515,6 +517,7 @@ $BlockBtn.Add_Click({
 
     Remove-Job -Job $job
 })
+
 
 
 $UnblockBtn.Add_Click({
