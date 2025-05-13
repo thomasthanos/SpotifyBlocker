@@ -454,82 +454,82 @@ $FullUninstallBtn.Add_Click({
 
 $BlockBtn.Add_Click({
 
-    # ========== Επανεκκίνηση με admin αν δεν έχει δικαιώματα ==========
-    if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-        Start-Process powershell "-ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
-        return
-    }
-
-    # Paths
-    $appDataSpotify = "$env:APPDATA\Spotify"
-    $localAppDataSpotify = "$env:LOCALAPPDATA\Spotify"
-    $updateFolder = Join-Path $localAppDataSpotify "update"
-    $exeFile = Join-Path $appDataSpotify "Spotify.exe"
-    $sigFile = Join-Path $appDataSpotify "Spotify.exe.sig"
-
-    # ===== Function: Deny Write Access to Folder/File =====
-    function Deny-WriteAccess {
-        param ([string]$path)
-
-        if (Test-Path $path) {
-            $acl = Get-Acl $path
-            $rule = New-Object System.Security.AccessControl.FileSystemAccessRule("Users", "Write", "ContainerInherit,ObjectInherit", "None", "Deny")
-            $acl.SetAccessRule($rule)
-            Set-Acl -Path $path -AclObject $acl
+    try {
+        # ===== Check Admin Permissions and Relaunch if Needed =====
+        if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+            Start-Process powershell "-ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
+            return
         }
-    }
 
-    # ===== Function: Deny All Except Admin =====
-    function Deny-AllExceptAdmin {
-        param ([string]$path)
+        # Show status label during execution
+        $StatusLabel.Content = "Εφαρμογή περιορισμών..."
+        $StatusLabel.Foreground = "Orange"
 
-        if (Test-Path $path) {
-            $acl = Get-Acl $path
-            $acl.SetAccessRuleProtection($true, $false)  # Disable inheritance
+        # Paths
+        $appDataSpotify = "$env:APPDATA\Spotify"
+        $localAppDataSpotify = "$env:LOCALAPPDATA\Spotify"
+        $updateFolder = Join-Path $localAppDataSpotify "update"
+        $exeFile = Join-Path $appDataSpotify "Spotify.exe"
+        $sigFile = Join-Path $appDataSpotify "Spotify.exe.sig"
 
-            # Remove all existing rules
-            foreach ($rule in $acl.Access) {
-                $acl.RemoveAccessRule($rule)
+        # ===== Function: Deny Write =====
+        function Deny-WriteAccess {
+            param ([string]$path)
+            if (Test-Path $path) {
+                $acl = Get-Acl $path
+                $rule = New-Object System.Security.AccessControl.FileSystemAccessRule("Users", "Write", "ContainerInherit,ObjectInherit", "None", "Deny")
+                $acl.SetAccessRule($rule)
+                Set-Acl $path $acl
             }
-
-            # Deny all for Users
-            $deny = New-Object System.Security.AccessControl.FileSystemAccessRule("Users", "FullControl", "Deny")
-            $acl.AddAccessRule($deny)
-
-            # Allow Admins
-            $allow = New-Object System.Security.AccessControl.FileSystemAccessRule("Administrators", "FullControl", "Allow")
-            $acl.AddAccessRule($allow)
-
-            Set-Acl -Path $path -AclObject $acl
         }
+
+        # ===== Function: Deny All Except Admin =====
+        function Deny-AllExceptAdmin {
+            param ([string]$path)
+            if (Test-Path $path) {
+                $acl = Get-Acl $path
+                $acl.SetAccessRuleProtection($true, $false)  # Disable inheritance
+                foreach ($rule in $acl.Access) {
+                    $acl.RemoveAccessRule($rule)
+                }
+                $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule("Users", "FullControl", "Deny")))
+                $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule("Administrators", "FullControl", "Allow")))
+                Set-Acl $path $acl
+            }
+        }
+
+        # ===== 1. Deny Write σε όλο το Spotify folder =====
+        Deny-WriteAccess -path $appDataSpotify
+
+        # ===== 2. Deny Write σε Spotify.exe (δύο φορές) =====
+        Deny-WriteAccess -path $exeFile
+        Start-Sleep -Milliseconds 300
+        Deny-WriteAccess -path $exeFile
+
+        # ===== 3. Deny-All εκτός Admin στο Spotify.exe.sig =====
+        Deny-AllExceptAdmin -path $sigFile
+
+        # ===== 4. Αντιμετώπιση του update folder =====
+        if (Test-Path $updateFolder) {
+            Remove-Item -Path $updateFolder -Recurse -Force
+        }
+        New-Item -ItemType Directory -Path $updateFolder -Force | Out-Null
+
+        if (Test-Path $updateFolder) {
+            $acl = Get-Acl $updateFolder
+            $denyRule = New-Object System.Security.AccessControl.FileSystemAccessRule("Users", "Read,Write", "ContainerInherit,ObjectInherit", "None", "Deny")
+            $acl.SetAccessRule($denyRule)
+            Set-Acl $updateFolder $acl
+        }
+
+        # ===== Success message on Label =====
+        $StatusLabel.Content = "✅ Περιορισμοί εφαρμόστηκαν με επιτυχία."
+        $StatusLabel.Foreground = "Green"
+
+    } catch {
+        $StatusLabel.Content = "❌ Σφάλμα κατά την εφαρμογή των περιορισμών: $_"
+        $StatusLabel.Foreground = "Red"
     }
-
-    # ===== 1. Deny Write σε όλο το %APPDATA%\Spotify =====
-    Deny-WriteAccess -path $appDataSpotify
-
-    # ===== 2. Ειδικά στο Spotify.exe → Deny Write (δύο φορές για ασφάλεια) =====
-    Deny-WriteAccess -path $exeFile
-    Start-Sleep -Milliseconds 300
-    Deny-WriteAccess -path $exeFile  # Retry
-
-    # ===== 3. Spotify.exe.sig → Full Deny εκτός Admins =====
-    Deny-AllExceptAdmin -path $sigFile
-
-    # ===== 4. %LOCALAPPDATA%\Spotify\update =====
-    if (Test-Path $updateFolder) {
-        Remove-Item -Path $updateFolder -Recurse -Force
-    }
-
-    New-Item -ItemType Directory -Path $updateFolder -Force | Out-Null
-
-    if (Test-Path $updateFolder) {
-        $acl = Get-Acl $updateFolder
-        $denyRule = New-Object System.Security.AccessControl.FileSystemAccessRule("Users", "Read,Write", "ContainerInherit,ObjectInherit", "None", "Deny")
-        $acl.SetAccessRule($denyRule)
-        Set-Acl $updateFolder $acl
-    }
-
-    [System.Windows.MessageBox]::Show("Όλα τα δικαιώματα εφαρμόστηκαν επιτυχώς.", "Επιτυχία", "OK", "Information")
 
 })
 
