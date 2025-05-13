@@ -542,29 +542,25 @@ icacls "%localappdata%\Spotify\Update" /remove:d "%username%"
 })
 # Πριν τα window controls, προσθήκη του νέου handler
 $BlockInstallerBtn.Add_Click({
-    Update-Status "Setting Caphyon folder to read-only/execute-only..."
-
+    Update-Status "Blocking Caphyon installer permissions..."
+    
     $job = Start-Job -ScriptBlock {
         try {
             $caphyonPath = "C:\Program Files (x86)\Caphyon"
             $username = $env:UserName
 
             if (Test-Path $caphyonPath) {
-                # Take ownership
-                & takeown /F "$caphyonPath" /R /D Y 2>&1 | Out-Null
-                & icacls "$caphyonPath" /grant "${username}:(OI)(CI)F" /T 2>&1 | Out-Null
-
-                # Remove all existing permissions and set read+execute only
-                & icacls "$caphyonPath" /reset /T 2>&1 | Out-Null
-                & icacls "$caphyonPath" /inheritance:r /T 2>&1 | Out-Null
-                & icacls "$caphyonPath" /grant:r "${username}:(OI)(CI)(RX)" /T 2>&1 | Out-Null
-
-                return "Caphyon folder is now read/execute only. Updates/changes blocked."
+                & takeown /F $caphyonPath /R /D Y 2>&1 | Out-Null
+                & icacls $caphyonPath /grant "${username}:(OI)(CI)F" /T 2>&1 | Out-Null
+                & icacls $caphyonPath /reset /T 2>&1 | Out-Null
+                & icacls $caphyonPath /deny "${username}:(D)" 2>&1 | Out-Null
+                & icacls $caphyonPath /deny "${username}:(R)" 2>&1 | Out-Null
+                return "Caphyon installer blocked successfully."
             } else {
-                return "Caphyon folder not found."
+                return "Caphyon folder not found. Nothing to block."
             }
         } catch {
-            return "Error: $_"
+            return "Failed to block Caphyon installer: $_"
         }
     }
 
@@ -578,7 +574,6 @@ $BlockInstallerBtn.Add_Click({
 
     Remove-Job -Job $job
 })
-
 # Window controls
 $ExitBtn.Add_Click({ $window.Close() })
 $MinimizeBtn.Add_Click({ $window.WindowState = "Minimized" })
