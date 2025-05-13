@@ -587,26 +587,27 @@ $UnblockBtn.Add_Click({
 })
 # Πριν τα window controls, προσθήκη του νέου handler
 $BlockInstallerBtn.Add_Click({
-    Update-Status "Requesting elevated permissions..."
 
-    $tempScript = "$env:TEMP\blockCaphyon.ps1"
+    Update-Status "Preparing SYSTEM-level execution..."
 
+    # Paths
+    $psexecPath = "C:\Tools\PsExec.exe"  # 🔁 Βεβαιώσου ότι αυτό είναι το σωστό path!
+    $scriptPath = "$env:TEMP\blockCaphyon.ps1"
+
+    # Save the full SYSTEM-level block script
     $scriptText = @'
 try {
     $folder = "C:\Program Files (x86)\Caphyon"
     $exe1 = "$folder\Advanced Installer 22.5\updater.exe"
 
     takeown /F "$folder" /R /D Y | Out-Null
-    icacls "$folder" /inheritance:r /T | Out-Null
+    icacls "$folder" /setowner "Administrators" /T | Out-Null
     icacls "$folder" /grant:r "Administrators:(OI)(CI)F" /T | Out-Null
+    icacls "$folder" /inheritance:r /T | Out-Null
     icacls "$folder" /deny "Users:(OI)(CI)(F)" /T | Out-Null
     icacls "$folder" /deny "Everyone:(OI)(CI)(F)" /T | Out-Null
 
-    Get-ScheduledTask | Where-Object { $_.TaskName -match "Advanced|Updater|Caphyon" } | ForEach-Object {
-        try {
-            Unregister-ScheduledTask -TaskName $_.TaskName -Confirm:$false -ErrorAction Stop
-        } catch {}
-    }
+    Get-Process -Name "updater" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
     $svc = Get-Service | Where-Object { $_.Name -like "*Updater*" }
     if ($svc) {
@@ -614,26 +615,27 @@ try {
         sc.exe delete $svc.Name | Out-Null
     }
 
-    if (Test-Path $exe1) {
-        New-NetFirewallRule -DisplayName "Block Updater" -Direction Outbound -Action Block -Program $exe1 -Profile Any -ErrorAction SilentlyContinue
-    }
-
-    $regPath = "HKCU:\Software\Caphyon\Advanced Updater"
+    $SID = (Get-WmiObject Win32_UserAccount | Where-Object { $_.Name -eq "$env:USERNAME" }).SID
+    $regPath = "Registry::HKEY_USERS\$SID\Software\Caphyon\Advanced Updater"
     if (Test-Path $regPath) {
         Remove-Item -Path $regPath -Recurse -Force
     }
 
-    Write-Host "✅ Caphyon blocked."
+    if (Test-Path $exe1) {
+        New-NetFirewallRule -DisplayName "Block Updater" -Direction Outbound -Action Block -Program $exe1 -Profile Any -ErrorAction SilentlyContinue
+    }
+
+    Write-Host "`n✅ [SYSTEM] Caphyon blocked."
 } catch {
-    Write-Host "❌ Error: $_"
+    Write-Host "`n❌ Error: $_"
 }
 '@
 
-    # Save the script only when button is clicked
-    $scriptText | Out-File -FilePath $tempScript -Encoding UTF8 -Force
+    # Write the script to file
+    $scriptText | Out-File -FilePath $scriptPath -Encoding UTF8 -Force
 
-    # Elevate and run it
-    Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$tempScript`"" -Verb RunAs
+    # Start PsExec as SYSTEM to run the script
+    Start-Process -FilePath "$psexecPath" -ArgumentList "-i -s powershell.exe -ExecutionPolicy Bypass -File `"$scriptPath`"" -Verb RunAs
 })
 
 # Window controls
