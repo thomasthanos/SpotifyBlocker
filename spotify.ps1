@@ -541,58 +541,39 @@ icacls "%localappdata%\Spotify\Update" /remove:d "%username%"
     Remove-Job -Job $job
 })
 # Πριν τα window controls, προσθήκη του νέου handler
-# === Πλήρες ΣΚΛΗΡΟ μπλοκάρισμα Caphyon / Advanced Installer ===
+$BlockInstallerBtn.Add_Click({
+    Update-Status "Blocking Caphyon installer permissions..."
+    
+    $job = Start-Job -ScriptBlock {
+        try {
+            $caphyonPath = "C:\Program Files (x86)\Caphyon"
+            $username = $env:UserName
 
-# 1. Σκληρό DENY σε όλους στον φάκελο Caphyon
-$caphyonPath = "C:\Program Files (x86)\Caphyon"
-
-if (Test-Path $caphyonPath) {
-    takeown /F "$caphyonPath" /R /D Y | Out-Null
-    icacls "$caphyonPath" /inheritance:r /T | Out-Null
-    icacls "$caphyonPath" /grant:r "Administrators:(OI)(CI)F" /T | Out-Null
-    icacls "$caphyonPath" /deny "Users:(OI)(CI)(F)" /T | Out-Null
-    icacls "$caphyonPath" /deny "Everyone:(OI)(CI)(F)" /T | Out-Null
-}
-
-# 2. Διαγραφή scheduled tasks σχετικών με Advanced Installer
-Get-ScheduledTask | Where-Object {$_.TaskName -match "Advanced|Updater|Caphyon"} | ForEach-Object {
-    Unregister-ScheduledTask -TaskName $_.TaskName -Confirm:$false
-}
-
-# 3. Σβήσιμο υπηρεσίας ενημέρωσης (αν υπάρχει)
-$service = Get-Service | Where-Object { $_.Name -like "*Updater*" -or $_.DisplayName -like "*Advanced*" }
-if ($service) {
-    Stop-Service $service.Name -Force -ErrorAction SilentlyContinue
-    sc.exe delete $service.Name | Out-Null
-}
-
-# 4. Registry cleanup για updater settings
-$regPath = "HKCU:\Software\Caphyon\Advanced Updater"
-if (Test-Path $regPath) {
-    Remove-Item -Path $regPath -Recurse -Force
-}
-
-# 5. AppLocker Rule (if on Pro/Enterprise): Block execution of AdvancedInstaller & Updater
-$exesToBlock = @(
-    "C:\Program Files (x86)\Caphyon\Advanced Installer 22.5\updater.exe",
-    "C:\Program Files (x86)\Caphyon\Advanced Installer 22.5\advancedinstaller.exe"
-)
-
-foreach ($exe in $exesToBlock) {
-    if (Test-Path $exe) {
-        $hash = Get-FileHash $exe -Algorithm SHA256
-        $rule = New-AppLockerPolicy -RuleType Path -User "Everyone" -RuleName "Block_$($exe)" -Path $exe -Deny
-        Set-AppLockerPolicy -PolicyObject $rule -Merge
+            if (Test-Path $caphyonPath) {
+                & takeown /F $caphyonPath /R /D Y 2>&1 | Out-Null
+                & icacls $caphyonPath /grant "${username}:(OI)(CI)F" /T 2>&1 | Out-Null
+                & icacls $caphyonPath /reset /T 2>&1 | Out-Null
+                & icacls $caphyonPath /deny "${username}:(D)" 2>&1 | Out-Null
+                & icacls $caphyonPath /deny "${username}:(R)" 2>&1 | Out-Null
+                return "Caphyon installer blocked successfully."
+            } else {
+                return "Caphyon folder not found. Nothing to block."
+            }
+        } catch {
+            return "Failed to block Caphyon installer: $_"
+        }
     }
-}
 
-# 6. Block internet access to Caphyon & updater via firewall (domain block)
-New-NetFirewallRule -DisplayName "Block Caphyon Outbound" -Direction Outbound -Action Block -RemoteFQDN "*.caphyon.com" -Profile Any
-New-NetFirewallRule -DisplayName "Block Updater EXE" -Direction Outbound -Action Block -Program "$caphyonPath\Advanced Installer 22.5\updater.exe" -Profile Any
+    while ($job.State -eq "Running") {
+        Start-Sleep -Milliseconds 100
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([action]{}, "Background")
+    }
 
-# 7. OPTIONAL: Disable winget completely (rename binary or block via policy)
-Rename-Item -Path "C:\Program Files\WindowsApps\Microsoft.DesktopAppInstaller*" -NewName "winget_blocked" -ErrorAction SilentlyContinue
+    $result = Receive-Job -Job $job
+    Update-Status $result
 
+    Remove-Job -Job $job
+})
 # Window controls
 $ExitBtn.Add_Click({ $window.Close() })
 $MinimizeBtn.Add_Click({ $window.WindowState = "Minimized" })
