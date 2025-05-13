@@ -187,7 +187,7 @@ $window = [Windows.Markup.XamlReader]::Load($reader)
 # Make window draggable
 $window.Add_MouseLeftButtonDown({ $window.DragMove() })
 
-# Get UI elements
+# Get GUI elements
 $InstallBtn = $window.FindName("InstallBtn")
 $UninstallBtn = $window.FindName("UninstallBtn")
 $FullUninstallBtn = $window.FindName("FullUninstallBtn")
@@ -449,161 +449,120 @@ $FullUninstallBtn.Add_Click({
 })
 
 $BlockBtn.Add_Click({
-    Update-Status "Starting to block Spotify updates..."
 
-    if (-not (Test-Path "$env:APPDATA\Spotify") -and -not (Test-Path "$env:LOCALAPPDATA\Spotify")) {
-        Update-Status "Spotify not found. Nothing to block."
-        return
-    }
+        $folderPath = "$env:APPDATA\Spotify"
+        $user = "$env:USERDOMAIN\$env:USERNAME"
 
-    $job = Start-Job -ScriptBlock {
-        try {
-            $username = $env:UserName
-            $appdataSpotify = "$env:APPDATA\Spotify"
-            $spotifyExe = "$env:APPDATA\Spotify\Spotify.exe"
-            $spotifySig = "$env:APPDATA\Spotify\Spotify.exe.sig"
-            $localAppDataSpotify = "$env:LOCALAPPDATA\Spotify"
-            $updateFolder = "$env:LOCALAPPDATA\Spotify\Update"
+        $writeRights = [System.Security.AccessControl.FileSystemRights]::WriteData `
+                     -bor [System.Security.AccessControl.FileSystemRights]::AppendData `
+                     -bor [System.Security.AccessControl.FileSystemRights]::WriteAttributes `
+                     -bor [System.Security.AccessControl.FileSystemRights]::WriteExtendedAttributes `
+                     -bor [System.Security.AccessControl.FileSystemRights]::CreateFiles `
+                     -bor [System.Security.AccessControl.FileSystemRights]::CreateDirectories
 
-            # Stop Spotify processes
-            Get-Process -Name Spotify -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 1
+        $acl = Get-Acl $folderPath
 
-            # Deny write to %APPDATA%\Spotify
-            if (Test-Path $appdataSpotify) {
-                & icacls $appdataSpotify /deny "${username}:(W)" /T 2>&1 | Out-Null
-            }
+        $denyFolderRule = New-Object System.Security.AccessControl.FileSystemAccessRule (
+            $user, $writeRights, "None", "None", "Deny"
+        )
+        $denyChildRule = New-Object System.Security.AccessControl.FileSystemAccessRule (
+            $user, $writeRights, "ContainerInherit, ObjectInherit", "InheritOnly", "Deny"
+        )
 
-            # Deny write to Spotify.exe
-            if (Test-Path $spotifyExe) {
-                & icacls $spotifyExe /deny "${username}:(W)" 2>&1 | Out-Null
-            }
+        $acl.AddAccessRule($denyFolderRule)
+        $acl.AddAccessRule($denyChildRule)
+        Set-Acl -Path $folderPath -AclObject $acl
 
-            # Full deny except admin for Spotify.exe.sig
-            if (Test-Path $spotifySig) {
-                & icacls $spotifySig /inheritance:r 2>&1 | Out-Null
-                & icacls $spotifySig /grant "Administrators:(F)" 2>&1 | Out-Null
-                & icacls $spotifySig /deny "${username}:(F)" 2>&1 | Out-Null
-                & icacls $spotifySig /deny "Everyone:(F)" 2>&1 | Out-Null
-            }
+        [System.Windows.MessageBox]::Show("Spotify folder write access blocked successfully.", "Success", "OK", "Information")
 
-            # Handle Update folder in %LOCALAPPDATA%\Spotify
-            if (Test-Path $localAppDataSpotify) {
-                if (Test-Path $updateFolder) {
-                    Remove-Item -Path $updateFolder -Recurse -Force -ErrorAction SilentlyContinue
-                }
-                New-Item -Path $updateFolder -ItemType Directory -Force | Out-Null
-                & icacls $updateFolder /deny "${username}:(R,W)" /T 2>&1 | Out-Null
-                & icacls $updateFolder /deny "Everyone:(R,W)" /T 2>&1 | Out-Null
-            }
-
-            return "Spotify updates blocked successfully."
-        } catch {
-            return "Failed to block Spotify updates: $_"
-        }
-    }
-
-    while ($job.State -eq "Running") {
-        Start-Sleep -Milliseconds 100
-        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([action]{}, "Background")
-    }
-
-    $result = Receive-Job -Job $job
-    Update-Status $result
-    Remove-Job -Job $job
 })
 
 $UnblockBtn.Add_Click({
-    Update-Status "Starting to unblock Spotify..."
+    $folderPath = "$env:APPDATA\Spotify"
+    $user = "$env:USERDOMAIN\$env:USERNAME"
 
-    if (-not (Test-Path "$env:LOCALAPPDATA\Spotify")) {
-        Update-Status "Spotify not found. Nothing to unblock."
-        return
-    }
+    # Same rights we denied earlier
+    $writeRights = [System.Security.AccessControl.FileSystemRights]::WriteData `
+                 -bor [System.Security.AccessControl.FileSystemRights]::AppendData `
+                 -bor [System.Security.AccessControl.FileSystemRights]::WriteAttributes `
+                 -bor [System.Security.AccessControl.FileSystemRights]::WriteExtendedAttributes `
+                 -bor [System.Security.AccessControl.FileSystemRights]::CreateFiles `
+                 -bor [System.Security.AccessControl.FileSystemRights]::CreateDirectories
 
-    $job = Start-Job -ScriptBlock {
-        try {
-            $username = $env:UserName
-            $updateFolder = "$env:LOCALAPPDATA\Spotify\Update"
-            $appdataSpotify = "$env:APPDATA\Spotify"
-            $spotifyExe = "$env:APPDATA\Spotify\Spotify.exe"
-            $spotifySig = "$env:APPDATA\Spotify\Spotify.exe.sig"
+    $acl = Get-Acl $folderPath
 
-            # Αφαίρεση DENY entries
-            foreach ($path in @($updateFolder, $appdataSpotify, $spotifyExe, $spotifySig)) {
-                if (Test-Path $path) {
-                    & icacls $path /remove:d "${username}" | Out-Null
-                    & icacls $path /remove:d "SYSTEM" | Out-Null
-                }
-            }
+    # Recreate the two exact deny rules
+    $denyFolderRule = New-Object System.Security.AccessControl.FileSystemAccessRule (
+        $user, $writeRights, "None", "None", "Deny"
+    )
+    $denyChildRule = New-Object System.Security.AccessControl.FileSystemAccessRule (
+        $user, $writeRights, "ContainerInherit, ObjectInherit", "InheritOnly", "Deny"
+    )
 
-            return "Spotify unblocked successfully."
-        } catch {
-            return "Failed to unblock Spotify: $_"
-        }
-    }
+    # Remove both rules
+    $acl.RemoveAccessRule($denyFolderRule) | Out-Null
+    $acl.RemoveAccessRule($denyChildRule) | Out-Null
+    Set-Acl -Path $folderPath -AclObject $acl
 
-    while ($job.State -eq "Running") {
-        Start-Sleep -Milliseconds 100
-        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([action]{}, "Background")
-    }
-
-    $result = Receive-Job -Job $job
-    Update-Status $result
-    Remove-Job -Job $job
+    [System.Windows.MessageBox]::Show("Write restrictions removed from Spotify folder.", "Unblocked", "OK", "Information")
 })
+
 
 # Πριν τα window controls, προσθήκη του νέου handler
 $BlockInstallerBtn.Add_Click({
-    Update-Status "Requesting elevated permissions..."
+    $user = "$env:USERDOMAIN\$env:USERNAME"
 
-    # Define block script inline
-    $scriptBlock = @"
-try {
-    \$folder = "C:\Program Files (x86)\Caphyon"
-    \$exe1 = "\$folder\Advanced Installer 22.5\updater.exe"
-    \$exe2 = "\$folder\Advanced Installer 22.5\advinst.exe"
+    # Define Write rights as GUI does
+    $writeRights = [System.Security.AccessControl.FileSystemRights]::WriteData `
+                 -bor [System.Security.AccessControl.FileSystemRights]::AppendData `
+                 -bor [System.Security.AccessControl.FileSystemRights]::WriteAttributes `
+                 -bor [System.Security.AccessControl.FileSystemRights]::WriteExtendedAttributes `
+                 -bor [System.Security.AccessControl.FileSystemRights]::CreateFiles `
+                 -bor [System.Security.AccessControl.FileSystemRights]::CreateDirectories
 
-    takeown /F "\$folder" /R /D Y | Out-Null
-    icacls "\$folder" /inheritance:r /T | Out-Null
-    icacls "\$folder" /grant:r "Administrators:(OI)(CI)F" /T | Out-Null
-    icacls "\$folder" /deny "Users:(OI)(CI)(F)" /T | Out-Null
-    icacls "\$folder" /deny "Everyone:(OI)(CI)(F)" /T | Out-Null
+    # 1. DENY:Write to folder Caphyon
+    $folderPath = "C:\Program Files (x86)\Caphyon"
+    $acl = Get-Acl $folderPath
 
-    Get-ScheduledTask | Where-Object {\$_.TaskName -match "Advanced|Updater|Caphyon"} | ForEach-Object {
-        try {
-            Unregister-ScheduledTask -TaskName \$_.TaskName -Confirm:\$false -ErrorAction Stop
-        } catch {}
+    $denyFolderRule = New-Object System.Security.AccessControl.FileSystemAccessRule (
+        $user, $writeRights, "None", "None", "Deny"
+    )
+    $denyChildRule = New-Object System.Security.AccessControl.FileSystemAccessRule (
+        $user, $writeRights, "ContainerInherit, ObjectInherit", "InheritOnly", "Deny"
+    )
+
+    $acl.AddAccessRule($denyFolderRule)
+    $acl.AddAccessRule($denyChildRule)
+    Set-Acl -Path $folderPath -AclObject $acl
+
+    # 2. Extra deny for specific EXEs/INIs in x86/x64 folders
+    $filePaths = @(
+        "C:\Program Files (x86)\Caphyon\Advanced Installer 22.5\bin\x86\advinst.exe",
+        "C:\Program Files (x86)\Caphyon\Advanced Installer 22.5\bin\x86\VmLauncher.exe",
+        "C:\Program Files (x86)\Caphyon\Advanced Installer 22.5\bin\x86\updater.exe",
+        "C:\Program Files (x86)\Caphyon\Advanced Installer 22.5\bin\x86\updater.ini",
+        "C:\Program Files (x86)\Caphyon\Advanced Installer 22.5\bin\x64\advinst.exe",
+        "C:\Program Files (x86)\Caphyon\Advanced Installer 22.5\bin\x64\VmLauncher.exe",
+        "C:\Program Files (x86)\Caphyon\Advanced Installer 22.5\bin\x64\updater.exe",
+        "C:\Program Files (x86)\Caphyon\Advanced Installer 22.5\bin\x64\updater.ini"
+    )
+
+    foreach ($file in $filePaths) {
+        if (Test-Path $file) {
+            $fileAcl = Get-Acl $file
+            $denyRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+                $user,
+                $writeRights,
+                "Deny"
+            )
+            $fileAcl.AddAccessRule($denyRule)
+            Set-Acl -Path $file -AclObject $fileAcl
+        }
     }
 
-    \$svc = Get-Service | Where-Object { \$_.Name -like "*Updater*" }
-    if (\$svc) {
-        Stop-Service \$svc.Name -Force -ErrorAction SilentlyContinue
-        sc.exe delete \$svc.Name | Out-Null
-    }
-
-    if (Test-Path \$exe1) {
-        New-NetFirewallRule -DisplayName "Block Updater" -Direction Outbound -Action Block -Program \$exe1 -Profile Any -ErrorAction SilentlyContinue
-    }
-
-    \$regPath = "HKCU:\Software\Caphyon\Advanced Updater"
-    if (Test-Path \$regPath) {
-        Remove-Item -Path \$regPath -Recurse -Force
-    }
-
-    Write-Host "✅ Caphyon blocked."
-} catch {
-    Write-Host "❌ Error: \$_"
-}
-"@
-
-    # Save to temp script file
-    $tempScript = "$env:TEMP\blockCaphyon.ps1"
-    $scriptBlock | Out-File -FilePath $tempScript -Encoding UTF8
-
-    # Run with elevation
-    Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$tempScript`"" -Verb RunAs
+    [System.Windows.MessageBox]::Show("Caphyon folder and executables blocked from write access.", "Installer Blocked", "OK", "Information")
 })
+
 
 # Window controls
 $ExitBtn.Add_Click({ $window.Close() })

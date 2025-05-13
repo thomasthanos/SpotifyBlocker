@@ -1,2 +1,5 @@
 Fix-MSI.ps1
 RunFixMSI.bat
+spottififi.ps1
+take_ownership_spotify.bat
+test.bat
