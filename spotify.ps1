@@ -510,9 +510,17 @@ $UnblockBtn.Add_Click({
 
 # Πριν τα window controls, προσθήκη του νέου handler
 $BlockInstallerBtn.Add_Click({
+
+    # Auto-elevate check
+    if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(`
+        [Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        
+        Start-Process powershell "-ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
+        return
+    }
+
     $user = "$env:USERDOMAIN\$env:USERNAME"
 
-    # Define Write rights as GUI does
     $writeRights = [System.Security.AccessControl.FileSystemRights]::WriteData `
                  -bor [System.Security.AccessControl.FileSystemRights]::AppendData `
                  -bor [System.Security.AccessControl.FileSystemRights]::WriteAttributes `
@@ -520,22 +528,22 @@ $BlockInstallerBtn.Add_Click({
                  -bor [System.Security.AccessControl.FileSystemRights]::CreateFiles `
                  -bor [System.Security.AccessControl.FileSystemRights]::CreateDirectories
 
-    # 1. DENY:Write to folder Caphyon
     $folderPath = "C:\Program Files (x86)\Caphyon"
-    $acl = Get-Acl $folderPath
+    if (Test-Path $folderPath) {
+        $acl = Get-Acl $folderPath
 
-    $denyFolderRule = New-Object System.Security.AccessControl.FileSystemAccessRule (
-        $user, $writeRights, "None", "None", "Deny"
-    )
-    $denyChildRule = New-Object System.Security.AccessControl.FileSystemAccessRule (
-        $user, $writeRights, "ContainerInherit, ObjectInherit", "InheritOnly", "Deny"
-    )
+        $denyFolderRule = New-Object System.Security.AccessControl.FileSystemAccessRule (
+            $user, $writeRights, "None", "None", "Deny"
+        )
+        $denyChildRule = New-Object System.Security.AccessControl.FileSystemAccessRule (
+            $user, $writeRights, "ContainerInherit, ObjectInherit", "InheritOnly", "Deny"
+        )
 
-    $acl.AddAccessRule($denyFolderRule)
-    $acl.AddAccessRule($denyChildRule)
-    Set-Acl -Path $folderPath -AclObject $acl
+        $acl.AddAccessRule($denyFolderRule)
+        $acl.AddAccessRule($denyChildRule)
+        Set-Acl -Path $folderPath -AclObject $acl
+    }
 
-    # 2. Extra deny for specific EXEs/INIs in x86/x64 folders
     $filePaths = @(
         "C:\Program Files (x86)\Caphyon\Advanced Installer 22.5\bin\x86\advinst.exe",
         "C:\Program Files (x86)\Caphyon\Advanced Installer 22.5\bin\x86\VmLauncher.exe",
@@ -560,8 +568,10 @@ $BlockInstallerBtn.Add_Click({
         }
     }
 
-    [System.Windows.MessageBox]::Show("Caphyon folder and executables blocked from write access.", "Installer Blocked", "OK", "Information")
+    # Update the status label instead of MessageBox
+    $StatusLabel.Text = "✅ Caphyon folder and files blocked from write access."
 })
+
 
 
 # Window controls
