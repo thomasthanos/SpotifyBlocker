@@ -456,6 +456,7 @@ $FullUninstallBtn.Add_Click({
 $BlockBtn.Add_Click({
     Update-Status "Starting to block Spotify updates..."
 
+    # Έλεγχος αν ο φάκελος Spotify υπάρχει
     if (-not (Test-Path "$env:LOCALAPPDATA\Spotify")) {
         Update-Status "Spotify not found. Please install Spotify first."
         return
@@ -466,39 +467,19 @@ $BlockBtn.Add_Click({
             Get-Process -Name Spotify -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 1
 
-            $username = $env:UserName
             $updateFolder = "$env:LOCALAPPDATA\Spotify\Update"
-            $appdataSpotify = "$env:APPDATA\Spotify"
-            $spotifyExe = "$env:LOCALAPPDATA\Spotify\Spotify.exe"
-            $spotifySig = "$env:LOCALAPPDATA\Spotify\Spotify.exe.sig"
+            $username = $env:UserName
 
-            # Reset permissions (clean slate)
-            foreach ($path in @($updateFolder, $appdataSpotify, $spotifyExe, $spotifySig)) {
-                if (Test-Path $path) {
-                    & icacls $path /reset /T /C | Out-Null
-                }
+            if (Test-Path $updateFolder) {
+                & takeown /F $updateFolder /R /D Y 2>&1 | Out-Null
+                & icacls $updateFolder /grant "${username}:(OI)(CI)F" /T 2>&1 | Out-Null
+                & icacls $updateFolder /reset /T 2>&1 | Out-Null
+                Remove-Item $updateFolder -Recurse -Force -ErrorAction SilentlyContinue
             }
 
-            # Εξασφαλίζουμε ότι ο φάκελος Update υπάρχει
-            if (-not (Test-Path $updateFolder)) {
-                New-Item $updateFolder -ItemType Directory -Force | Out-Null
-            }
-
-            # Εφαρμογή permissions βάσει πίνακα
-            & icacls $updateFolder /deny "${username}:(DE,RC)" | Out-Null
-            if (Test-Path $appdataSpotify) {
-                & icacls $appdataSpotify /deny "${username}:(W)" | Out-Null
-            }
-
-            if (Test-Path $spotifyExe) {
-                & icacls $spotifyExe /deny "${username}:(W)" | Out-Null
-                & icacls $spotifyExe /deny "SYSTEM:(F)" | Out-Null
-            }
-
-            if (Test-Path $spotifySig) {
-                & icacls $spotifySig /deny "${username}:(F)" | Out-Null
-                & icacls $spotifySig /deny "SYSTEM:(F)" | Out-Null
-            }
+            New-Item $updateFolder -ItemType Directory -Force | Out-Null
+            & icacls $updateFolder /deny "${username}:(D)" 2>&1 | Out-Null
+            & icacls $updateFolder /deny "${username}:(R)" 2>&1 | Out-Null
 
             return "Spotify updates blocked successfully."
         } catch {
@@ -513,9 +494,9 @@ $BlockBtn.Add_Click({
 
     $result = Receive-Job -Job $job
     Update-Status $result
+
     Remove-Job -Job $job
 })
-
 
 $UnblockBtn.Add_Click({
     Update-Status "Starting to unblock Spotify updates..."
