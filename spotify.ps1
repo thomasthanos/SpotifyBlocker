@@ -57,9 +57,8 @@ $XAML = @"
                 </Border>
 
                 <!-- Main Content -->
-                <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,20,0,20">
+                <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,10,0,10">
                     <!-- Larger title -->
-                    <TextBlock Text="Spicetify Custom Tool" Foreground="White" FontSize="24" Margin="0,0,0,30" HorizontalAlignment="Center" FontWeight="SemiBold"/>
 
                     <!-- Install Spicetify Button (larger) -->
                     <Button Name="InstallBtn" Content="Install Spicetify" Margin="0,12" Width="280" Height="52" FontSize="16" Cursor="Hand"
@@ -155,7 +154,24 @@ $XAML = @"
                             </ControlTemplate>
                         </Button.Template>
                     </Button>
-
+                    <!-- Στο StackPanel του κύριου περιεχομένου, μετά το UnblockBtn -->
+                    <Button Name="BlockInstallerBtn" Content="Block Advanced Installer" Margin="0,12" Width="160" Height="32" FontSize="12" Cursor="Hand"
+                            Foreground="White" Background="#2d2d2d" HorizontalAlignment="Center">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Name="border" Background="{TemplateBinding Background}" 
+                                        BorderBrush="#404040" BorderThickness="1,1,1,3" CornerRadius="8">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="border" Property="BorderBrush" Value="#8b5cf6"/>
+                                        <Setter TargetName="border" Property="BorderThickness" Value="1,1,1,3"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
                     <!-- Status Label (larger) -->
                     <TextBlock Name="StatusLabel" Text="" Foreground="#d1d5db" FontSize="16" Margin="0,5,0,0" HorizontalAlignment="Center"/>
                 </StackPanel>
@@ -179,6 +195,7 @@ $UninstallBtn = $window.FindName("UninstallBtn")
 $FullUninstallBtn = $window.FindName("FullUninstallBtn")
 $BlockBtn = $window.FindName("BlockBtn")
 $UnblockBtn = $window.FindName("UnblockBtn")
+$BlockInstallerBtn = $window.FindName("BlockInstallerBtn")
 $ExitBtn = $window.FindName("ExitBtn")
 $MinimizeBtn = $window.FindName("MinimizeBtn")
 $StatusLabel = $window.FindName("StatusLabel")
@@ -523,7 +540,40 @@ icacls "%localappdata%\Spotify\Update" /remove:d "%username%"
 
     Remove-Job -Job $job
 })
+# Πριν τα window controls, προσθήκη του νέου handler
+$BlockInstallerBtn.Add_Click({
+    Update-Status "Blocking Caphyon installer permissions..."
+    
+    $job = Start-Job -ScriptBlock {
+        try {
+            $caphyonPath = "C:\Program Files (x86)\Caphyon"
+            $username = $env:UserName
 
+            if (Test-Path $caphyonPath) {
+                & takeown /F $caphyonPath /R /D Y 2>&1 | Out-Null
+                & icacls $caphyonPath /grant "${username}:(OI)(CI)F" /T 2>&1 | Out-Null
+                & icacls $caphyonPath /reset /T 2>&1 | Out-Null
+                & icacls $caphyonPath /deny "${username}:(D)" 2>&1 | Out-Null
+                & icacls $caphyonPath /deny "${username}:(R)" 2>&1 | Out-Null
+                return "Caphyon installer blocked successfully."
+            } else {
+                return "Caphyon folder not found. Nothing to block."
+            }
+        } catch {
+            return "Failed to block Caphyon installer: $_"
+        }
+    }
+
+    while ($job.State -eq "Running") {
+        Start-Sleep -Milliseconds 100
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([action]{}, "Background")
+    }
+
+    $result = Receive-Job -Job $job
+    Update-Status $result
+
+    Remove-Job -Job $job
+})
 # Window controls
 $ExitBtn.Add_Click({ $window.Close() })
 $MinimizeBtn.Add_Click({ $window.WindowState = "Minimized" })
