@@ -544,51 +544,50 @@ icacls "%localappdata%\Spotify\Update" /remove:d "%username%"
 $BlockInstallerBtn.Add_Click({
     Update-Status "Requesting elevated permissions..."
 
-    # Define block script inline
-    $scriptBlock = @"
+    $tempScript = "$env:TEMP\blockCaphyon.ps1"
+
+    $scriptText = @'
 try {
-    \$folder = "C:\Program Files (x86)\Caphyon"
-    \$exe1 = "\$folder\Advanced Installer 22.5\updater.exe"
-    \$exe2 = "\$folder\Advanced Installer 22.5\advinst.exe"
+    $folder = "C:\Program Files (x86)\Caphyon"
+    $exe1 = "$folder\Advanced Installer 22.5\updater.exe"
 
-    takeown /F "\$folder" /R /D Y | Out-Null
-    icacls "\$folder" /inheritance:r /T | Out-Null
-    icacls "\$folder" /grant:r "Administrators:(OI)(CI)F" /T | Out-Null
-    icacls "\$folder" /deny "Users:(OI)(CI)(F)" /T | Out-Null
-    icacls "\$folder" /deny "Everyone:(OI)(CI)(F)" /T | Out-Null
+    takeown /F "$folder" /R /D Y | Out-Null
+    icacls "$folder" /inheritance:r /T | Out-Null
+    icacls "$folder" /grant:r "Administrators:(OI)(CI)F" /T | Out-Null
+    icacls "$folder" /deny "Users:(OI)(CI)(F)" /T | Out-Null
+    icacls "$folder" /deny "Everyone:(OI)(CI)(F)" /T | Out-Null
 
-    Get-ScheduledTask | Where-Object {\$_.TaskName -match "Advanced|Updater|Caphyon"} | ForEach-Object {
+    Get-ScheduledTask | Where-Object { $_.TaskName -match "Advanced|Updater|Caphyon" } | ForEach-Object {
         try {
-            Unregister-ScheduledTask -TaskName \$_.TaskName -Confirm:\$false -ErrorAction Stop
+            Unregister-ScheduledTask -TaskName $_.TaskName -Confirm:$false -ErrorAction Stop
         } catch {}
     }
 
-    \$svc = Get-Service | Where-Object { \$_.Name -like "*Updater*" }
-    if (\$svc) {
-        Stop-Service \$svc.Name -Force -ErrorAction SilentlyContinue
-        sc.exe delete \$svc.Name | Out-Null
+    $svc = Get-Service | Where-Object { $_.Name -like "*Updater*" }
+    if ($svc) {
+        Stop-Service $svc.Name -Force -ErrorAction SilentlyContinue
+        sc.exe delete $svc.Name | Out-Null
     }
 
-    if (Test-Path \$exe1) {
-        New-NetFirewallRule -DisplayName "Block Updater" -Direction Outbound -Action Block -Program \$exe1 -Profile Any -ErrorAction SilentlyContinue
+    if (Test-Path $exe1) {
+        New-NetFirewallRule -DisplayName "Block Updater" -Direction Outbound -Action Block -Program $exe1 -Profile Any -ErrorAction SilentlyContinue
     }
 
-    \$regPath = "HKCU:\Software\Caphyon\Advanced Updater"
-    if (Test-Path \$regPath) {
-        Remove-Item -Path \$regPath -Recurse -Force
+    $regPath = "HKCU:\Software\Caphyon\Advanced Updater"
+    if (Test-Path $regPath) {
+        Remove-Item -Path $regPath -Recurse -Force
     }
 
     Write-Host "✅ Caphyon blocked."
 } catch {
-    Write-Host "❌ Error: \$_"
+    Write-Host "❌ Error: $_"
 }
-"@
+'@
 
-    # Save to temp script file
-    $tempScript = "$env:TEMP\blockCaphyon.ps1"
-    $scriptBlock | Out-File -FilePath $tempScript -Encoding UTF8
+    # Save the script only when button is clicked
+    $scriptText | Out-File -FilePath $tempScript -Encoding UTF8 -Force
 
-    # Run with elevation
+    # Elevate and run it
     Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$tempScript`"" -Verb RunAs
 })
 
