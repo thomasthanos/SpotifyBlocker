@@ -542,47 +542,29 @@ icacls "%localappdata%\Spotify\Update" /remove:d "%username%"
 })
 # Πριν τα window controls, προσθήκη του νέου handler
 $BlockInstallerBtn.Add_Click({
-    Update-Status "Blocking Caphyon installer updates and permissions..."
+    Update-Status "Applying full DENY to Caphyon folder..."
 
     $job = Start-Job -ScriptBlock {
         try {
             $caphyonPath = "C:\Program Files (x86)\Caphyon"
-            $username = $env:UserName
 
-            # 1. Block file/folder write access, allow read/execute
             if (Test-Path $caphyonPath) {
+                # Take ownership
                 & takeown /F "$caphyonPath" /R /D Y 2>&1 | Out-Null
-                & icacls "$caphyonPath" /grant "${username}:(OI)(CI)F" /T 2>&1 | Out-Null
-                & icacls "$caphyonPath" /reset /T 2>&1 | Out-Null
+                & icacls "$caphyonPath" /grant "Administrators:(OI)(CI)F" /T 2>&1 | Out-Null
+
+                # Remove inheritance
                 & icacls "$caphyonPath" /inheritance:r /T 2>&1 | Out-Null
-                & icacls "$caphyonPath" /grant:r "${username}:(OI)(CI)(RX)" /T 2>&1 | Out-Null
-            }
 
-            # 2. Remove Scheduled Tasks related to Advanced Installer Updater
-            $tasks = schtasks /Query /FO LIST /V | Select-String "AdvancedInstaller|Updater|Caphyon"
-            foreach ($line in $tasks) {
-                if ($line -match "TaskName:\s+(.*)$") {
-                    $taskName = $matches[1].Trim()
-                    schtasks /Delete /TN "$taskName" /F 2>&1 | Out-Null
-                }
-            }
+                # Deny access to Everyone
+                & icacls "$caphyonPath" /deny "Everyone:(OI)(CI)(F)" /T 2>&1 | Out-Null
 
-            # 3. Stop and disable update-related service (if exists)
-            $serviceName = "AdvancedUpdaterService"
-            if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
-                Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
-                Set-Service -Name $serviceName -StartupType Disabled
+                return "Caphyon folder fully blocked for all users."
+            } else {
+                return "Caphyon folder not found."
             }
-
-            # 4. Remove updater registry keys (user-level only)
-            $updaterRegPath = "HKCU:\Software\Caphyon\Advanced Updater"
-            if (Test-Path $updaterRegPath) {
-                Remove-Item -Path $updaterRegPath -Recurse -Force
-            }
-
-            return "Caphyon updates and permissions successfully blocked."
         } catch {
-            return "Error during block: $_"
+            return "Error applying deny: $_"
         }
     }
 
