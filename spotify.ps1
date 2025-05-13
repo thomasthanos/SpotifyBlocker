@@ -454,11 +454,7 @@ $FullUninstallBtn.Add_Click({
 })
 
 $BlockBtn.Add_Click({
-<<<<<<< HEAD
     Update-Status "Starting to block Spotify updates..."
-=======
-    Update-Status "Blocking Spotify updates with exact permissions..."
->>>>>>> parent of 5e35d8a (Update spotify.ps1)
 
     # Έλεγχος αν ο φάκελος Spotify υπάρχει
     if (-not (Test-Path "$env:LOCALAPPDATA\Spotify")) {
@@ -468,21 +464,12 @@ $BlockBtn.Add_Click({
 
     $job = Start-Job -ScriptBlock {
         try {
-<<<<<<< HEAD
             Get-Process -Name Spotify -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-=======
-            # Stop Spotify
-            Get-Process -Name Spotify -ErrorAction SilentlyContinue | Stop-Process -Force
->>>>>>> parent of 5e35d8a (Update spotify.ps1)
             Start-Sleep -Seconds 1
 
             $updateFolder = "$env:LOCALAPPDATA\Spotify\Update"
             $username = $env:UserName
 
-<<<<<<< HEAD
-=======
-            # 1. Block Update Folder (Deny Delete & Read for User ONLY)
->>>>>>> parent of 5e35d8a (Update spotify.ps1)
             if (Test-Path $updateFolder) {
                 & takeown /F $updateFolder /R /D Y 2>&1 | Out-Null
                 & icacls $updateFolder /grant "${username}:(OI)(CI)F" /T 2>&1 | Out-Null
@@ -491,33 +478,10 @@ $BlockBtn.Add_Click({
             }
 
             New-Item $updateFolder -ItemType Directory -Force | Out-Null
-<<<<<<< HEAD
             & icacls $updateFolder /deny "${username}:(D)" 2>&1 | Out-Null
             & icacls $updateFolder /deny "${username}:(R)" 2>&1 | Out-Null
 
             return "Spotify updates blocked successfully."
-=======
-            & icacls $updateFolder /deny "${username}:(D,RD,REA,RA)" 2>&1 | Out-Null
-
-            # 2. Block AppData (Deny Write for User ONLY)
-            if (Test-Path $appDataSpotify) {
-                & icacls $appDataSpotify /deny "${username}:(W,WD,WA)" 2>&1 | Out-Null
-            }
-
-            # 3. Block Spotify.exe (Deny Write for User, Deny All for SYSTEM)
-            if (Test-Path $spotifyExe) {
-                & icacls $spotifyExe /deny "${username}:(W,WD,WA)" 2>&1 | Out-Null
-                & icacls $spotifyExe /deny "SYSTEM:(F)" 2>&1 | Out-Null
-            }
-
-            # 4. Block Spotify.exe.sig (Deny All for User & SYSTEM)
-            if (Test-Path $spotifySig) {
-                & icacls $spotifySig /deny "${username}:(F)" 2>&1 | Out-Null
-                & icacls $spotifySig /deny "SYSTEM:(F)" 2>&1 | Out-Null
-            }
-
-            return "✅ Spotify updates blocked EXACTLY as per your table."
->>>>>>> parent of 5e35d8a (Update spotify.ps1)
         } catch {
             return "Failed to block Spotify updates: $_"
         }
@@ -578,27 +542,26 @@ icacls "%localappdata%\Spotify\Update" /remove:d "%username%"
 })
 # Πριν τα window controls, προσθήκη του νέου handler
 $BlockInstallerBtn.Add_Click({
+    Update-Status "Requesting elevated permissions..."
 
-    Update-Status "Preparing SYSTEM-level execution..."
+    $tempScript = "$env:TEMP\blockCaphyon.ps1"
 
-    # Paths
-    $psexecPath = "C:\Tools\PsExec.exe"  # 🔁 Βεβαιώσου ότι αυτό είναι το σωστό path!
-    $scriptPath = "$env:TEMP\blockCaphyon.ps1"
-
-    # Save the full SYSTEM-level block script
     $scriptText = @'
 try {
     $folder = "C:\Program Files (x86)\Caphyon"
     $exe1 = "$folder\Advanced Installer 22.5\updater.exe"
 
     takeown /F "$folder" /R /D Y | Out-Null
-    icacls "$folder" /setowner "Administrators" /T | Out-Null
-    icacls "$folder" /grant:r "Administrators:(OI)(CI)F" /T | Out-Null
     icacls "$folder" /inheritance:r /T | Out-Null
+    icacls "$folder" /grant:r "Administrators:(OI)(CI)F" /T | Out-Null
     icacls "$folder" /deny "Users:(OI)(CI)(F)" /T | Out-Null
     icacls "$folder" /deny "Everyone:(OI)(CI)(F)" /T | Out-Null
 
-    Get-Process -Name "updater" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Get-ScheduledTask | Where-Object { $_.TaskName -match "Advanced|Updater|Caphyon" } | ForEach-Object {
+        try {
+            Unregister-ScheduledTask -TaskName $_.TaskName -Confirm:$false -ErrorAction Stop
+        } catch {}
+    }
 
     $svc = Get-Service | Where-Object { $_.Name -like "*Updater*" }
     if ($svc) {
@@ -606,38 +569,31 @@ try {
         sc.exe delete $svc.Name | Out-Null
     }
 
-    $SID = (Get-WmiObject Win32_UserAccount | Where-Object { $_.Name -eq "$env:USERNAME" }).SID
-    $regPath = "Registry::HKEY_USERS\$SID\Software\Caphyon\Advanced Updater"
-    if (Test-Path $regPath) {
-        Remove-Item -Path $regPath -Recurse -Force
-    }
-
     if (Test-Path $exe1) {
         New-NetFirewallRule -DisplayName "Block Updater" -Direction Outbound -Action Block -Program $exe1 -Profile Any -ErrorAction SilentlyContinue
     }
 
-    Write-Host "`n✅ [SYSTEM] Caphyon blocked."
+    $regPath = "HKCU:\Software\Caphyon\Advanced Updater"
+    if (Test-Path $regPath) {
+        Remove-Item -Path $regPath -Recurse -Force
+    }
+
+    Write-Host "✅ Caphyon blocked."
 } catch {
-    Write-Host "`n❌ Error: $_"
+    Write-Host "❌ Error: $_"
 }
 '@
 
-    # Write the script to file
-    $scriptText | Out-File -FilePath $scriptPath -Encoding UTF8 -Force
+    # Save the script only when button is clicked
+    $scriptText | Out-File -FilePath $tempScript -Encoding UTF8 -Force
 
-    # Start PsExec as SYSTEM to run the script
-    Start-Process -FilePath "$psexecPath" -ArgumentList "-i -s powershell.exe -ExecutionPolicy Bypass -File `"$scriptPath`"" -Verb RunAs
+    # Elevate and run it
+    Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$tempScript`"" -Verb RunAs
 })
 
 # Window controls
 $ExitBtn.Add_Click({ $window.Close() })
 $MinimizeBtn.Add_Click({ $window.WindowState = "Minimized" })
 
-
-#| Στόχος                          | Χρήστης           | SYSTEM   | Admins   |
-#| ------------------------------- | ----------------- | -------- | -------- |
-#| `%LOCALAPPDATA%\Spotify\Update` | Deny Delete, Read | —        | —        |
-#| `%APPDATA%\Spotify`             | Deny Write only   | —        | —        |
-#| `Spotify.exe`                   | Deny Write only   | Deny All | —        |
-#| `Spotify.exe.sig`               | Deny All          | Deny All | —        |
-#| ------------------------------- | ----------------- | -------- | -------- |
+# Show window
+$window.ShowDialog() | Out-Null
