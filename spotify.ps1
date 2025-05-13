@@ -456,7 +456,6 @@ $FullUninstallBtn.Add_Click({
 $BlockBtn.Add_Click({
     Update-Status "Starting to block Spotify updates..."
 
-    # Έλεγχος αν ο φάκελος Spotify υπάρχει
     if (-not (Test-Path "$env:LOCALAPPDATA\Spotify")) {
         Update-Status "Spotify not found. Please install Spotify first."
         return
@@ -467,19 +466,38 @@ $BlockBtn.Add_Click({
             Get-Process -Name Spotify -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 1
 
-            $updateFolder = "$env:LOCALAPPDATA\Spotify\Update"
+            $localUpdateFolder = "$env:LOCALAPPDATA\Spotify\Update"
+            $appdataFolder = "$env:APPDATA\Spotify"
             $username = $env:UserName
 
-            if (Test-Path $updateFolder) {
-                & takeown /F $updateFolder /R /D Y 2>&1 | Out-Null
-                & icacls $updateFolder /grant "${username}:(OI)(CI)F" /T 2>&1 | Out-Null
-                & icacls $updateFolder /reset /T 2>&1 | Out-Null
-                Remove-Item $updateFolder -Recurse -Force -ErrorAction SilentlyContinue
+            # BLOCK LOCALAPPDATA\Spotify\Update
+            if (Test-Path $localUpdateFolder) {
+                & takeown /F $localUpdateFolder /R /D Y 2>&1 | Out-Null
+                & icacls $localUpdateFolder /grant "${username}:(OI)(CI)F" /T 2>&1 | Out-Null
+                & icacls $localUpdateFolder /reset /T 2>&1 | Out-Null
+                Remove-Item $localUpdateFolder -Recurse -Force -ErrorAction SilentlyContinue
             }
 
-            New-Item $updateFolder -ItemType Directory -Force | Out-Null
-            & icacls $updateFolder /deny "${username}:(D)" 2>&1 | Out-Null
-            & icacls $updateFolder /deny "${username}:(R)" 2>&1 | Out-Null
+            New-Item $localUpdateFolder -ItemType Directory -Force | Out-Null
+            & icacls $localUpdateFolder /deny "${username}:(D)" 2>&1 | Out-Null
+            & icacls $localUpdateFolder /deny "${username}:(R)" 2>&1 | Out-Null
+
+            # BLOCK APPDATA\Spotify folder (deny write for user)
+            if (Test-Path $appdataFolder) {
+                & takeown /F $appdataFolder /R /D Y 2>&1 | Out-Null
+                & icacls $appdataFolder /grant "${username}:(OI)(CI)F" /T 2>&1 | Out-Null
+                & icacls $appdataFolder /deny "${username}:(W)" /T 2>&1 | Out-Null
+            }
+
+            # DENY access to specific files inside %APPDATA%\Spotify
+            $filesToDeny = @("Spotify.exe", "Spotify.exe.sig")
+            foreach ($file in $filesToDeny) {
+                $filePath = Join-Path $appdataFolder $file
+                if (Test-Path $filePath) {
+                    & icacls $filePath /deny "SYSTEM:(F)" 2>&1 | Out-Null
+                    & icacls $filePath /deny "${username}:(F)" 2>&1 | Out-Null
+                }
+            }
 
             return "Spotify updates blocked successfully."
         } catch {
@@ -498,6 +516,7 @@ $BlockBtn.Add_Click({
     Remove-Job -Job $job
 })
 
+
 $UnblockBtn.Add_Click({
     Update-Status "Starting to unblock Spotify updates..."
 
@@ -512,14 +531,45 @@ $UnblockBtn.Add_Click({
             Get-Process -Name Spotify -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 1
 
+            $username = $env:UserName
+            $updateFolder = "$env:LOCALAPPDATA\Spotify\Update"
+            $appdataFolder = "$env:APPDATA\Spotify"
+            $spotifyExe = Join-Path $appdataFolder "Spotify.exe"
+            $spotifySig = Join-Path $appdataFolder "Spotify.exe.sig"
+
             $unblockScript = @"
-icacls "%localappdata%\Spotify\Update" /remove:d "%username%"
+:: --- UNBLOCK LOCALAPPDATA\Spotify\Update ---
+if exist "$updateFolder" (
+    icacls "$updateFolder" /remove:d "$username"
+    icacls "$updateFolder" /reset /T
+)
+
+:: --- UNBLOCK APPDATA\Spotify folder write deny ---
+if exist "$appdataFolder" (
+    icacls "$appdataFolder" /remove:d "$username"
+    icacls "$appdataFolder" /reset /T
+)
+
+:: --- UNBLOCK Spotify.exe ---
+if exist "$spotifyExe" (
+    icacls "$spotifyExe" /remove:d "$username"
+    icacls "$spotifyExe" /remove:d "SYSTEM"
+    icacls "$spotifyExe" /reset
+)
+
+:: --- UNBLOCK Spotify.exe.sig ---
+if exist "$spotifySig" (
+    icacls "$spotifySig" /remove:d "$username"
+    icacls "$spotifySig" /remove:d "SYSTEM"
+    icacls "$spotifySig" /reset
+)
 "@
+
             $unblockFile = "$env:TEMP\unblock-spotify.cmd"
-            $unblockScript | Out-File -FilePath $unblockFile -Encoding ASCII
-            
+            $unblockScript | Out-File -FilePath $unblockFile -Encoding ASCII -Force
+
             $process = Start-Process cmd.exe -ArgumentList "/c `"$unblockFile`"" -Verb RunAs -PassThru -Wait
-            
+
             if ($process.ExitCode -eq 0) {
                 return "Spotify updates unblocked successfully."
             } else {
@@ -540,6 +590,9 @@ icacls "%localappdata%\Spotify\Update" /remove:d "%username%"
 
     Remove-Job -Job $job
 })
+
+
+
 # Πριν τα window controls, προσθήκη του νέου handler
 $BlockInstallerBtn.Add_Click({
     Update-Status "Requesting elevated permissions..."
