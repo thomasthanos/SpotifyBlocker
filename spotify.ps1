@@ -153,23 +153,6 @@ $XAML = @"
                         </Button.Template>
                     </Button>
                     <!-- Στο StackPanel του κύριου περιεχομένου, μετά το UnblockBtn -->
-                    <Button Name="BlockInstallerBtn" Content="Block Advanced Installer" Margin="0,12" Width="160" Height="32" FontSize="12" Cursor="Hand"
-                            Foreground="White" Background="#2d2d2d" HorizontalAlignment="Center">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border Name="border" Background="{TemplateBinding Background}" 
-                                        BorderBrush="#404040" BorderThickness="1,1,1,3" CornerRadius="8">
-                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
-                                <ControlTemplate.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="border" Property="BorderBrush" Value="#8b5cf6"/>
-                                        <Setter TargetName="border" Property="BorderThickness" Value="1,1,1,3"/>
-                                    </Trigger>
-                                </ControlTemplate.Triggers>
-                            </ControlTemplate>
-                        </Button.Template>
-                    </Button>
                     <!-- Status Label (larger) -->
                     <TextBlock Name="StatusLabel" Text="" Foreground="#d1d5db" FontSize="16" Margin="0,5,0,0" HorizontalAlignment="Center"/>
                 </StackPanel>
@@ -193,7 +176,6 @@ $UninstallBtn = $window.FindName("UninstallBtn")
 $FullUninstallBtn = $window.FindName("FullUninstallBtn")
 $BlockBtn = $window.FindName("BlockBtn")
 $UnblockBtn = $window.FindName("UnblockBtn")
-$BlockInstallerBtn = $window.FindName("BlockInstallerBtn")
 $ExitBtn = $window.FindName("ExitBtn")
 $MinimizeBtn = $window.FindName("MinimizeBtn")
 $StatusLabel = $window.FindName("StatusLabel")
@@ -507,70 +489,6 @@ $UnblockBtn.Add_Click({
     [System.Windows.MessageBox]::Show("Write restrictions removed from Spotify folder.", "Unblocked", "OK", "Information")
 })
 
-
-# Πριν τα window controls, προσθήκη του νέου handler
-$BlockInstallerBtn.Add_Click({
-
-    # Auto-elevate check
-    if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(`
-        [Security.Principal.WindowsBuiltInRole]::Administrator)) {
-        
-        Start-Process powershell "-ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
-        return
-    }
-
-    $user = "$env:USERDOMAIN\$env:USERNAME"
-
-    $writeRights = [System.Security.AccessControl.FileSystemRights]::WriteData `
-                 -bor [System.Security.AccessControl.FileSystemRights]::AppendData `
-                 -bor [System.Security.AccessControl.FileSystemRights]::WriteAttributes `
-                 -bor [System.Security.AccessControl.FileSystemRights]::WriteExtendedAttributes `
-                 -bor [System.Security.AccessControl.FileSystemRights]::CreateFiles `
-                 -bor [System.Security.AccessControl.FileSystemRights]::CreateDirectories
-
-    $folderPath = "C:\Program Files (x86)\Caphyon"
-    if (Test-Path $folderPath) {
-        $acl = Get-Acl $folderPath
-
-        $denyFolderRule = New-Object System.Security.AccessControl.FileSystemAccessRule (
-            $user, $writeRights, "None", "None", "Deny"
-        )
-        $denyChildRule = New-Object System.Security.AccessControl.FileSystemAccessRule (
-            $user, $writeRights, "ContainerInherit, ObjectInherit", "InheritOnly", "Deny"
-        )
-
-        $acl.AddAccessRule($denyFolderRule)
-        $acl.AddAccessRule($denyChildRule)
-        Set-Acl -Path $folderPath -AclObject $acl
-    }
-
-    $filePaths = @(
-        "C:\Program Files (x86)\Caphyon\Advanced Installer 22.5\bin\x86\advinst.exe",
-        "C:\Program Files (x86)\Caphyon\Advanced Installer 22.5\bin\x86\VmLauncher.exe",
-        "C:\Program Files (x86)\Caphyon\Advanced Installer 22.5\bin\x86\updater.exe",
-        "C:\Program Files (x86)\Caphyon\Advanced Installer 22.5\bin\x86\updater.ini",
-        "C:\Program Files (x86)\Caphyon\Advanced Installer 22.5\bin\x64\advinst.exe",
-        "C:\Program Files (x86)\Caphyon\Advanced Installer 22.5\bin\x64\VmLauncher.exe",
-        "C:\Program Files (x86)\Caphyon\Advanced Installer 22.5\bin\x64\updater.exe",
-        "C:\Program Files (x86)\Caphyon\Advanced Installer 22.5\bin\x64\updater.ini"
-    )
-
-    foreach ($file in $filePaths) {
-        if (Test-Path $file) {
-            $fileAcl = Get-Acl $file
-            $denyRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
-                $user,
-                $writeRights,
-                "Deny"
-            )
-            $fileAcl.AddAccessRule($denyRule)
-            Set-Acl -Path $file -AclObject $fileAcl
-        }
-    }
-
-    # Update the status label instead of MessageBox
-    $StatusLabel.Text = "✅ Caphyon folder and files blocked from write access."
-})
 
 
 
