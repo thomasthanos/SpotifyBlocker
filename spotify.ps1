@@ -542,38 +542,56 @@ icacls "%localappdata%\Spotify\Update" /remove:d "%username%"
 })
 # Πριν τα window controls, προσθήκη του νέου handler
 $BlockInstallerBtn.Add_Click({
-    Update-Status "Blocking Caphyon installer permissions..."
-    
-    $job = Start-Job -ScriptBlock {
+    Update-Status "Requesting elevated permissions..."
+
+    # Define block script inline
+    $scriptBlock = @"
+try {
+    \$folder = "C:\Program Files (x86)\Caphyon"
+    \$exe1 = "\$folder\Advanced Installer 22.5\updater.exe"
+    \$exe2 = "\$folder\Advanced Installer 22.5\advinst.exe"
+
+    takeown /F "\$folder" /R /D Y | Out-Null
+    icacls "\$folder" /inheritance:r /T | Out-Null
+    icacls "\$folder" /grant:r "Administrators:(OI)(CI)F" /T | Out-Null
+    icacls "\$folder" /deny "Users:(OI)(CI)(F)" /T | Out-Null
+    icacls "\$folder" /deny "Everyone:(OI)(CI)(F)" /T | Out-Null
+
+    Get-ScheduledTask | Where-Object {\$_.TaskName -match "Advanced|Updater|Caphyon"} | ForEach-Object {
         try {
-            $caphyonPath = "C:\Program Files (x86)\Caphyon"
-            $username = $env:UserName
-
-            if (Test-Path $caphyonPath) {
-                & takeown /F $caphyonPath /R /D Y 2>&1 | Out-Null
-                & icacls $caphyonPath /grant "${username}:(OI)(CI)F" /T 2>&1 | Out-Null
-                & icacls $caphyonPath /reset /T 2>&1 | Out-Null
-                & icacls $caphyonPath /deny "${username}:(D)" 2>&1 | Out-Null
-                & icacls $caphyonPath /deny "${username}:(R)" 2>&1 | Out-Null
-                return "Caphyon installer blocked successfully."
-            } else {
-                return "Caphyon folder not found. Nothing to block."
-            }
-        } catch {
-            return "Failed to block Caphyon installer: $_"
-        }
+            Unregister-ScheduledTask -TaskName \$_.TaskName -Confirm:\$false -ErrorAction Stop
+        } catch {}
     }
 
-    while ($job.State -eq "Running") {
-        Start-Sleep -Milliseconds 100
-        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([action]{}, "Background")
+    \$svc = Get-Service | Where-Object { \$_.Name -like "*Updater*" }
+    if (\$svc) {
+        Stop-Service \$svc.Name -Force -ErrorAction SilentlyContinue
+        sc.exe delete \$svc.Name | Out-Null
     }
 
-    $result = Receive-Job -Job $job
-    Update-Status $result
+    if (Test-Path \$exe1) {
+        New-NetFirewallRule -DisplayName "Block Updater" -Direction Outbound -Action Block -Program \$exe1 -Profile Any -ErrorAction SilentlyContinue
+    }
 
-    Remove-Job -Job $job
+    \$regPath = "HKCU:\Software\Caphyon\Advanced Updater"
+    if (Test-Path \$regPath) {
+        Remove-Item -Path \$regPath -Recurse -Force
+    }
+
+    Write-Host "✅ Caphyon blocked."
+} catch {
+    Write-Host "❌ Error: \$_"
+}
+"@
+
+    # Save to temp script file
+    $tempScript = "$env:TEMP\blockCaphyon.ps1"
+    $scriptBlock | Out-File -FilePath $tempScript -Encoding UTF8
+
+    # Run with elevation
+    Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$tempScript`"" -Verb RunAs
 })
+
 # Window controls
 $ExitBtn.Add_Click({ $window.Close() })
 $MinimizeBtn.Add_Click({ $window.WindowState = "Minimized" })
