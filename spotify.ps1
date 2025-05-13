@@ -542,25 +542,47 @@ icacls "%localappdata%\Spotify\Update" /remove:d "%username%"
 })
 # Πριν τα window controls, προσθήκη του νέου handler
 $BlockInstallerBtn.Add_Click({
-    Update-Status "Blocking Caphyon installer permissions..."
-    
+    Update-Status "Blocking Caphyon installer updates and permissions..."
+
     $job = Start-Job -ScriptBlock {
         try {
             $caphyonPath = "C:\Program Files (x86)\Caphyon"
             $username = $env:UserName
 
+            # 1. Block file/folder write access, allow read/execute
             if (Test-Path $caphyonPath) {
-                & takeown /F $caphyonPath /R /D Y 2>&1 | Out-Null
-                & icacls $caphyonPath /grant "${username}:(OI)(CI)F" /T 2>&1 | Out-Null
-                & icacls $caphyonPath /reset /T 2>&1 | Out-Null
-                & icacls $caphyonPath /deny "${username}:(D)" 2>&1 | Out-Null
-                & icacls $caphyonPath /deny "${username}:(R)" 2>&1 | Out-Null
-                return "Caphyon installer blocked successfully."
-            } else {
-                return "Caphyon folder not found. Nothing to block."
+                & takeown /F "$caphyonPath" /R /D Y 2>&1 | Out-Null
+                & icacls "$caphyonPath" /grant "${username}:(OI)(CI)F" /T 2>&1 | Out-Null
+                & icacls "$caphyonPath" /reset /T 2>&1 | Out-Null
+                & icacls "$caphyonPath" /inheritance:r /T 2>&1 | Out-Null
+                & icacls "$caphyonPath" /grant:r "${username}:(OI)(CI)(RX)" /T 2>&1 | Out-Null
             }
+
+            # 2. Remove Scheduled Tasks related to Advanced Installer Updater
+            $tasks = schtasks /Query /FO LIST /V | Select-String "AdvancedInstaller|Updater|Caphyon"
+            foreach ($line in $tasks) {
+                if ($line -match "TaskName:\s+(.*)$") {
+                    $taskName = $matches[1].Trim()
+                    schtasks /Delete /TN "$taskName" /F 2>&1 | Out-Null
+                }
+            }
+
+            # 3. Stop and disable update-related service (if exists)
+            $serviceName = "AdvancedUpdaterService"
+            if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
+                Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
+                Set-Service -Name $serviceName -StartupType Disabled
+            }
+
+            # 4. Remove updater registry keys (user-level only)
+            $updaterRegPath = "HKCU:\Software\Caphyon\Advanced Updater"
+            if (Test-Path $updaterRegPath) {
+                Remove-Item -Path $updaterRegPath -Recurse -Force
+            }
+
+            return "Caphyon updates and permissions successfully blocked."
         } catch {
-            return "Failed to block Caphyon installer: $_"
+            return "Error during block: $_"
         }
     }
 
@@ -574,6 +596,7 @@ $BlockInstallerBtn.Add_Click({
 
     Remove-Job -Job $job
 })
+
 # Window controls
 $ExitBtn.Add_Click({ $window.Close() })
 $MinimizeBtn.Add_Click({ $window.WindowState = "Minimized" })
