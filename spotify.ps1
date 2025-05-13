@@ -453,6 +453,8 @@ $FullUninstallBtn.Add_Click({
     Remove-Job -Job $job
 })
 
+Add-Type -AssemblyName System.Windows.Forms
+
 $BlockBtn.Add_Click({
     Update-Status "Starting to block Spotify updates..."
 
