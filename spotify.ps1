@@ -454,7 +454,7 @@ $FullUninstallBtn.Add_Click({
 })
 
 $BlockBtn.Add_Click({
-    Update-Status "Blocking Spotify updates with exact permissions..."
+    Update-Status "Applying STRICT Spotify update blocks..."
 
     if (-not (Test-Path "$env:LOCALAPPDATA\Spotify")) {
         Update-Status "Spotify not found. Install Spotify first."
@@ -465,7 +465,7 @@ $BlockBtn.Add_Click({
         try {
             # Stop Spotify
             Get-Process -Name Spotify -ErrorAction SilentlyContinue | Stop-Process -Force
-            Start-Sleep -Seconds 1
+            Start-Sleep -Seconds 2
 
             $username = $env:UserName
             $spotifyPath = "$env:LOCALAPPDATA\Spotify"
@@ -474,31 +474,38 @@ $BlockBtn.Add_Click({
             $spotifyExe = "$spotifyPath\Spotify.exe"
             $spotifySig = "$spotifyPath\Spotify.exe.sig"
 
-            # 1. Block Update Folder (Deny Delete & Read for User ONLY)
+            # 1. BLOCK UPDATE FOLDER (Deny Delete/Read for User)
             if (Test-Path $updateFolder) {
                 Remove-Item $updateFolder -Recurse -Force -ErrorAction SilentlyContinue
             }
             New-Item $updateFolder -ItemType Directory -Force | Out-Null
+            & icacls $updateFolder /inheritance:r 2>&1 | Out-Null
+            & icacls $updateFolder /grant:r "${username}:(R)" 2>&1 | Out-Null
             & icacls $updateFolder /deny "${username}:(D,RD,REA,RA)" 2>&1 | Out-Null
 
-            # 2. Block AppData (Deny Write for User ONLY)
+            # 2. BLOCK APPDATA (Deny Write for User)
             if (Test-Path $appDataSpotify) {
+                & icacls $appDataSpotify /inheritance:r 2>&1 | Out-Null
+                & icacls $appDataSpotify /grant:r "${username}:(RX)" 2>&1 | Out-Null
                 & icacls $appDataSpotify /deny "${username}:(W,WD,WA)" 2>&1 | Out-Null
             }
 
-            # 3. Block Spotify.exe (Deny Write for User, Deny All for SYSTEM)
+            # 3. BLOCK SPOTIFY.EXE (Deny Write for User, Deny All for SYSTEM)
             if (Test-Path $spotifyExe) {
+                & icacls $spotifyExe /inheritance:r 2>&1 | Out-Null
+                & icacls $spotifyExe /grant:r "${username}:(RX)" 2>&1 | Out-Null
                 & icacls $spotifyExe /deny "${username}:(W,WD,WA)" 2>&1 | Out-Null
                 & icacls $spotifyExe /deny "SYSTEM:(F)" 2>&1 | Out-Null
             }
 
-            # 4. Block Spotify.exe.sig (Deny All for User & SYSTEM)
+            # 4. BLOCK SPOTIFY.EXE.SIG (Deny All for User & SYSTEM)
             if (Test-Path $spotifySig) {
+                & icacls $spotifySig /inheritance:r 2>&1 | Out-Null
                 & icacls $spotifySig /deny "${username}:(F)" 2>&1 | Out-Null
                 & icacls $spotifySig /deny "SYSTEM:(F)" 2>&1 | Out-Null
             }
 
-            return "✅ Spotify updates blocked EXACTLY as per your table."
+            return "✅ Updates blocked CORRECTLY. Check with: icacls ""$updateFolder"""
         } catch {
             return "❌ Error: $_"
         }
