@@ -23,4 +23,5 @@ A simple PowerShell-based GUI tool to manage Spicetify and Spotify installations
      ```powershell
      iwr -useb https://raw.githubusercontent.com/thomasthanos/SpotifyBlocker/refs/heads/main/spotify.ps1 | iex
      ```
-     ![Στιγμιότυπο οθόνης 2025-05-13 000810](https://github.com/user-attachments/assets/0770d58e-3e7a-4137-94c0-27db63a9821c)
+
+![you did it! (1)](https://github.com/user-attachments/assets/0baeaf5a-6d72-40cd-a99b-17e7c2c31acd)
