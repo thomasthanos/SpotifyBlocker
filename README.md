@@ -21,7 +21,7 @@ A simple PowerShell-based GUI tool to manage Spicetify and Spotify installations
    - Open PowerShell as Administrator.
    - Run the following command to download and execute the script directly:
      ```powershell
-     iwr -useb https://raw.githubusercontent.com/thomasthanos/SpotifyBlocker/refs/heads/main/spotify.ps1 | iex
+     iwr -useb https://raw.githubusercontent.com/thomasthanos/SpotifyBlocker/main/spotify.ps1 | iex
      ```
 
 ![you did it!](https://github.com/user-attachments/assets/a7292382-58b1-4f69-b329-ab3c391755e9)
